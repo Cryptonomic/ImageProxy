@@ -1,0 +1,10 @@
+refresh_rate: 30 seconds
+appenders:  
+  stdout:
+    kind: console    
+
+# Set the default logging level to "warn" and attach the "stdout" appender to the root
+root:
+  level: debug
+  appenders:
+    - stdout
