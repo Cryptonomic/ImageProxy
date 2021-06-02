@@ -1,0 +1,5 @@
+{
+  "proxyURL": "http://localhost:3000",
+  "reportsEndpoint": "reports",
+  "infoEndpoint": "info"
+}
