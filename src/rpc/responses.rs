@@ -133,6 +133,7 @@ impl DescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
+                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
@@ -158,6 +159,7 @@ impl ReportResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
+                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
@@ -180,6 +182,7 @@ impl ReportDescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
+                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
