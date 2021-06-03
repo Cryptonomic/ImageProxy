@@ -43,7 +43,7 @@ A docker compose file is provided with this repository. The following steps will
 1. Create and download a AWS Access Keys from the IAM for the user you created in the previous step. Keep this information safe!
 ![IAM Access Keys](docs/aws3.png "IAM Access Keys")
 
-1. Create and `.env` file in the project root with the following contents:
+1. Create an `.env` file in the project root with the following contents:
     ```
     AWS_ACCESS_KEY_ID=<YOUR AWS ACCESS KEY ID>
     AWS_SECRET_ACCESS_KEY=<YOUR AWS ACCESS KEY>
