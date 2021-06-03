@@ -1,20 +1,18 @@
 version: "3"
 
 services:
-  proxy:
-    build: .
-    image: nft_image_proxy:latest
+  proxy:    
+    image: ${IMG_PROXY_DOCKER_IMAGE:-cryptonomictech/nft-image-proxy:latest}
     environment:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
     networks:
       - proxy-net
     ports:
-      - 3000:3000
-    # Uncomment the following if you want to use config different than the default
-    # volumes:    
-    #   - "./proxy.conf:/opt/img_proxy/proxy.conf"
-    #   - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
+      - ${PORT:-3000}:3000
+    volumes:
+      - "./proxy.conf:/opt/img_proxy/proxy.conf"
+      - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
     depends_on:
       - database
   database:
@@ -27,8 +25,6 @@ services:
       - proxy-net
     expose:
       - 5432
-    ports:
-      - 5432:5432
     volumes:
       - database-data:/var/lib/postgresql/data/
       - "./sql/:/docker-entrypoint-initdb.d/"

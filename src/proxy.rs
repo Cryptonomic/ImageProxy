@@ -114,7 +114,11 @@ async fn info() -> Result<Response<Body>, GenericError> {
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
     };
     let result = serde_json::to_string(&info).unwrap_or_default().to_owned();
-    Ok(Response::new(Body::from(result)))
+    Ok(Response::builder()
+        .status(hyper::StatusCode::OK)
+        .header(hyper::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(result))
+        .unwrap_or_default())
 }
 
 async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, GenericError> {
