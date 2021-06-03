@@ -25,8 +25,6 @@ services:
       - proxy-net
     expose:
       - 5432
-    ports:
-      - 5432:5432
     volumes:
       - database-data:/var/lib/postgresql/data/
       - "./sql/:/docker-entrypoint-initdb.d/"
