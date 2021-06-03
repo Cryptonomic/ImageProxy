@@ -66,7 +66,7 @@ This is a JSON rpc based API. Every request made to the rpc endpoint must have t
 The following methods are supported by the proxy:
 
 1. `img_proxy_fetch` : Fetch images from a remote location.
-1. `img_proxy_describe` : Describe any moderation results stored in the database for a given url.
+1. `img_proxy_describe` : Describe any moderation results stored in the database for a given url. This is particularly helpful when one wishes to obtain bulk moderation results before rendering many images, such as in a Gallery.
 1. `img_proxy_report` : Allows users to report a url as having objectionable content.
 1. `img_proxy_report_describe` : Dumps all prior user reports
 
@@ -161,7 +161,7 @@ curl --location --request POST 'https://imgproxy-preview.cryptonomic-infra.tech'
     "jsonrpc": "1.0.0",
     "method": "img_proxy_describe",
     "params": {
-        "urls":[ "https://upload.wikimedia.org/wikipedia/commons/1/1b/GreatBarrierReef-EO.JPG", "https://upload.wikimedia.org/wikipedia/commons/8/84/Michelangelo%27s_David_2015.jpg",  "https://localhost:3000" ]
+        "urls":[ "https://upload.wikimedia.org/wikipedia/commons/1/1b/GreatBarrierReef-EO.JPG", "https://upload.wikimedia.org/wikipedia/commons/8/84/Michelangelo%27s_David_2015.jpg",  "https://localhost:3000/island.gif" ]
     }
 }'
 ```
@@ -188,7 +188,7 @@ The following response is expected:
       "provider": "Aws"
     },
     {
-      "url": "https://localhost:3000",
+      "url": "https://localhost:3000/island.gif",
       "status": "NeverSeen",
       "categories": [],
       "provider": "None"
@@ -244,11 +244,7 @@ curl --location --request POST 'https://imgproxy-preview.cryptonomic-infra.tech'
 --header 'Content-Type: application/json' \
 --data-raw '{
     "jsonrpc": "1.0.0",
-    "method": "img_proxy_describe",
-    "params": {
-        "urls":[
-             "https://upload.wikimedia.org/wikipedia/commons/1/1b/GreatBarrierReef-EO.JPG", "https://upload.wikimedia.org/wikipedia/commons/8/84/Michelangelo%27s_David_2015.jpg", "https://localhost:3000/Plata_O_Plomo.gif" ]
-    }
+    "method": "img_proxy_describe_report"
 }'
 ```
 
@@ -259,25 +255,20 @@ A typical response should look like this:
     "code": "Ok",
     "result": [
         {
-            "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/GreatBarrierReef-EO.JPG",
-            "status": "Allowed",
-            "categories": [],
-            "provider": "Aws"
-        },
-        {
-            "url": "https://upload.wikimedia.org/wikipedia/commons/8/84/Michelangelo%27s_David_2015.jpg",
-            "status": "Blocked",
+            "url": "https://localhost:3000/Plata_O_Plomo.gif",
             "categories": [
-                "ExplicitNudity",
-                "Suggestive"
+                "Drugs"
             ],
-            "provider": "Aws"
+            "id": "e82b99b4-4d72-45d8-9f39-4aef10d89e3e",
+            "updated_at": "2021-06-03 12:57:59.346193 UTC"
         },
         {
-            "url": "https://localhost:3000",
-            "status": "NeverSeen",
-            "categories": [],
-            "provider": "None"
+            "url": "https://localhost:3000/Plata_O_Plomo.gif",
+            "categories": [
+                "Drugs"
+            ],
+            "id": "bde3d2a6-ea46-48c6-9a24-4cb956e98010",
+            "updated_at": "2021-06-03 13:17:45.630878 UTC"
         }
     ]
 }
