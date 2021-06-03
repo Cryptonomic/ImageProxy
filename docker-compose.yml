@@ -1,9 +1,8 @@
 version: "3"
 
 services:
-  proxy:
-    build: .
-    image: ${IMG_PROXY_DOCKER_IMAGE:-nft_image_proxy:latest}
+  proxy:    
+    image: ${IMG_PROXY_DOCKER_IMAGE:-cryptonomictech/nft-image-proxy:latest}
     environment:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
