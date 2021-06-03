@@ -194,4 +194,40 @@ impl Database {
             })
             .collect())
     }
+
+    pub async fn get_all_moderation_result(&self) -> Result<Vec<DocumentCacheRow>> {
+        let conn = self.pool.get().await?;
+        let results = conn
+            .query(
+                "SELECT blocked, categories, provider, url from documents;",
+                &[],
+            )
+            .await?;
+
+        debug!("Retrieved {} rows.", results.len());
+        if results.len() == 0 {
+            return Ok(Vec::new());
+        }
+
+        Ok(results
+            .iter()
+            .map(|r| {
+                let blocked: bool = r.get("blocked");
+                let categories: &str = r.get("categories");
+                let provider: &str = r.get("provider");
+                let url: &str = r.get("url");
+
+                let categories = serde_json::from_str::<Vec<ModerationCategories>>(&categories)
+                    .unwrap_or(Vec::new());
+                let provider = serde_json::from_str::<ModerationService>(&provider)
+                    .unwrap_or(ModerationService::Unknown);
+                DocumentCacheRow {
+                    blocked,
+                    categories: categories.clone(),
+                    provider: provider,
+                    url: String::from(url),
+                }
+            })
+            .collect())
+    }
 }

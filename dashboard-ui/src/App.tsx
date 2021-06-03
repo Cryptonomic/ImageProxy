@@ -1,9 +1,11 @@
-import React, { Component, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Dashboard from "./components/Dashboard";
 import Navbar from "./components/Navbar";
 import Panel from "./components/Panel";
 import ReportTable from "./components/ReportTable";
+import ModerationTable from "./components/ModerationTable";
 import { getInfo, Info } from "./utils/ImageProxy";
+import Metrics from "./components/Metrics";
 
 function App() {
   const [info, setInfo] = useState<Info>();
@@ -28,10 +30,20 @@ function App() {
             <div>Git Version: {info?.git_version} </div>
           </div>
         </Panel>
-        <Panel />
+
+        <Panel>
+          <Metrics />
+        </Panel>
+
         <Panel>
           <ReportTable />
         </Panel>
+
+        <Panel>
+          <ModerationTable />
+        </Panel>
+
+        <Panel />
       </Dashboard>
     </div>
   );

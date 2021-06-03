@@ -16,6 +16,8 @@ use crate::{
     db::Database,
     moderation::{ModerationProvider, ModerationService},
 };
+use std::fs::File;
+use std::io::prelude::*;
 
 use chrono::{DateTime, Utc};
 
@@ -69,6 +71,18 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     let response_time_start = Utc::now();
 
     let response = match (req.method(), req.uri().path()) {
+        (&Method::OPTIONS, _) => Ok(Response::builder()
+            .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .header(
+                hyper::header::ACCESS_CONTROL_ALLOW_METHODS,
+                "POST, GET, OPTIONS",
+            )
+            .header(hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+            .header(hyper::header::ACCESS_CONTROL_MAX_AGE, 86400)
+            .header(hyper::header::ACCESS_CONTROL_ALLOW_HEADERS, "apikey")
+            .status(StatusCode::OK)
+            .body(Body::default())
+            .unwrap_or_default()),
         (&Method::POST, "/") => {
             if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
                 rpc(proxy, req).await.or_else(|e| {
@@ -87,9 +101,11 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .body(Body::default())
             .unwrap_or_default()),
         (&Method::GET, "/info") => info().await,
+        (&Method::GET, "/admin") => admin().await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => {
             metrics(&proxy.start_time).await
         }
+        (&Method::GET, path) => get_file(path).await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::default())
@@ -121,6 +137,28 @@ async fn info() -> Result<Response<Body>, GenericError> {
     Ok(response)
 }
 
+async fn get_file(path: &str) -> Result<Response<Body>, GenericError> {
+    let mut f = File::open(format!("./ui/{}", path)).unwrap();
+    let mut source = Vec::new();
+    f.read_to_end(&mut source).unwrap();
+    let response = Response::builder()
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(Body::from(source))
+        .unwrap();
+    Ok(response)
+}
+
+async fn admin() -> Result<Response<Body>, GenericError> {
+    let mut f = File::open("./ui/index.html").unwrap();
+    let mut source = Vec::new();
+    f.read_to_end(&mut source).unwrap();
+    let response = Response::builder()
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(Body::from(source))
+        .unwrap();
+    Ok(response)
+}
+
 async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, GenericError> {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
@@ -147,9 +185,11 @@ async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, G
 
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
-    Ok(Response::new(Body::from(
-        output.unwrap_or(String::default()),
-    )))
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(Body::from(output.unwrap_or(String::default())))
+        .unwrap_or_default())
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, StatusCodes> {

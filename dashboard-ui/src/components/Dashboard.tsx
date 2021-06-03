@@ -1,4 +1,4 @@
-import React, { useState, FunctionComponent } from "react";
+import React, { useState } from "react";
 
 interface Props {
   names: string[];
@@ -19,7 +19,7 @@ const Dashboard: React.FC<Props> = ({ names, children }) => {
             {
               <div
                 className={
-                  (i == ind ? "bg-orange" : "bg-transparent") +
+                  (i === ind ? "bg-orange" : "bg-transparent") +
                   " h-1 w-full my-2"
                 }
               />

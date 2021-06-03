@@ -138,11 +138,20 @@ impl Methods {
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
         );
-        match proxy.database.get_moderation_result(&params.urls).await {
+
+        let is_wildcard = "*" == params.urls.get(0).unwrap_or(&String::from(""));
+        let from_db = match is_wildcard {
+            true => proxy.database.get_all_moderation_result().await,
+            _ => proxy.database.get_moderation_result(&params.urls).await,
+        };
+        match from_db {
             Ok(results) => {
                 info!("Fetched results for id={}, rows={}", req_id, results.len());
-                let describe_results: Vec<DescribeResult> = params
-                    .urls
+                let urls = match is_wildcard {
+                    true => results.iter().map(|r| r.url.clone()).collect(),
+                    _ => params.urls.clone(),
+                };
+                let describe_results: Vec<DescribeResult> = urls
                     .iter()
                     .map(|url| match results.iter().find(|r| r.url.eq(url)) {
                         Some(res) => {

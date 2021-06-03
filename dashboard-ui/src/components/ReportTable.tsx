@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getReports, Report } from "../utils/ImageProxy";
-import chevron from "../images/chevron.svg";
-
-interface HeaderProps {
-  hook: [
-    AggregatedReport[],
-    React.Dispatch<React.SetStateAction<AggregatedReport[]>>
-  ];
-  fieldname: string;
-  className?: string;
-  active?: boolean;
-}
+import SortByHeader from "./SortByHeader";
 
 interface AggregatedReport {
   [key: string]: any;
@@ -22,59 +12,19 @@ interface AggregatedReport {
   num_reports: number;
 }
 
-const SortByHeader: React.FC<HeaderProps> = ({
-  hook,
-  fieldname,
-  className,
-  children,
-  active,
-}) => {
-  const [data, update] = hook;
-  const [isAsc, setIsAsc] = useState(false);
-  const [hov, setHov] = useState(false);
-  const [isActive, setIsActive] = useState(active || false);
-
-  const asc = (firstElem: AggregatedReport, secondElem: AggregatedReport) =>
-    firstElem[fieldname] <= secondElem[fieldname] ? -1 : 1;
-  const desc = (firstElem: AggregatedReport, secondElem: AggregatedReport) =>
-    firstElem[fieldname] > secondElem[fieldname] ? -1 : 1;
-
-  return (
-    <th
-      className={className}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-    >
-      <div className="flex flex-row">
-        <div className="mr-4">{children}</div>
-        <div className="flex flex-col justify-center">
-          <img
-            src={chevron}
-            className={`w-4 h-4 opacity-${
-              hov || isActive ? 50 : 0
-            } hover:opacity-100 transform transition rotate-${isAsc ? 180 : 0}`}
-            alt="arrow"
-            onClick={() => {
-              setIsAsc(!isAsc);
-              update([...data].sort(isAsc ? asc : desc));
-              setIsActive(true);
-            }}
-          />
-        </div>
-      </div>
-    </th>
-  );
-};
-
 const aggregateReports = (reports: Report[]) => {
   let res: AggregatedReport[] = [];
   reports.forEach((report) => {
-    let sameUrl = res.find((elem) => elem.url == report.url);
+    let sameUrl = res.find((elem) => elem.url === report.url);
     if (sameUrl) {
       sameUrl.num_reports += 1;
       sameUrl.id.push(report.id);
       if (report.updated_at > sameUrl.updated_at)
         sameUrl.updated_at = report.updated_at;
+      report.categories.forEach((category) => {
+        if (!sameUrl?.categories.includes(category))
+          sameUrl?.categories.push(category);
+      });
     } else {
       res.push({
         ...report,
@@ -137,7 +87,7 @@ const ReportTable: React.FC = () => {
       </thead>
       <tbody>
         {reportData.map((report, i) => {
-          const bg = i % 2 == 0 ? "bg-background-dark" : "bg-background-light";
+          const bg = i % 2 === 0 ? "bg-background-dark" : "bg-background-light";
           const styles = "font-light py-3 pl-3 pr-10 ";
           return (
             <tr key={i} className={styles + bg}>
@@ -152,13 +102,15 @@ const ReportTable: React.FC = () => {
                       report.url.split("/")[report.url.split("/").length - 1]
                     }`}
                   >
-                    {" "}
                     {report.url}
                   </a>
                 }
               </td>
               <td className={styles + bg}>
-                {report.categories.map((label) => label + ", ")}
+                {report.categories.map(
+                  (label, i) =>
+                    label + (i !== report.categories.length - 1 ? ", " : "")
+                )}
               </td>
               <td className={styles + bg}>{report.num_reports}</td>
               <td className={styles + bg}>{report.updated_at}</td>

@@ -1,4 +1,10 @@
 import config from "../config.json";
+import parsePrometheusTextFormat from "parse-prometheus-text-format";
+
+export interface Info {
+  package_version: string;
+  git_version: string;
+}
 
 export interface Report {
   [key: string]: any;
@@ -8,10 +14,17 @@ export interface Report {
   updated_at: string;
 }
 
-export interface Info {
-  package_version: string;
-  git_version: string;
+export interface ModerationInfo {
+  url: string;
+  status: string;
+  categories: string[];
+  provider: string;
+  index: number;
 }
+
+export const getInfo = async (): Promise<Info> => {
+  return (await fetch(`${config.proxyURL}/info`)).json();
+};
 
 export const getReports = async (): Promise<Report[]> => {
   const init = {
@@ -20,40 +33,44 @@ export const getReports = async (): Promise<Report[]> => {
       jsonrpc: "1.0.0",
       method: "img_proxy_describe_report",
     }),
+    headers: {
+      apikey: config.apikey,
+    },
   };
   const res: Report[] = (
     await fetch(`${config.proxyURL}`, init).then((res) => res.json())
   ).result;
   return res;
-  /*   
-  return [
-    {
-      index: 1,
-      reason: ["nudity"],
-      url: "ipfs://ipfs/QmaaSqjrvJXMNyRsHHDrCfWBX6LJmdMR85qjQmd1rf8rie",
-      num_reports: 2,
-      last_time: "1-1-20",
-      labels: ["nudity", "graphic nudity"],
-    },
-    {
-      index: 2,
-      reason: ["nudity"],
-      url: "ipfs://ipfs/QmP9ymAjLyxM6gHHVnVDp3PYFtbx4KbaC12qH991GcgPNW",
-      num_reports: 5,
-      last_time: "2-2-20",
-      labels: ["nudity", "graphic nudity"],
-    },
-    {
-      index: 3,
-      reason: ["graphic violence"],
-      url: "ipfs://ipfs/Qmb21ShLn2CLDTy5cYbXPS3yZVPmiCVH8RXzBUcXAp4qhu",
-      num_reports: 42,
-      last_time: "1-2-20",
-      labels: ["graphic content"],
-    },
-  ]; */
 };
 
-export const getInfo = async (): Promise<Info> => {
-  return (await fetch(`${config.proxyURL}/${config.infoEndpoint}`)).json();
+export const getModerationReports = async (): Promise<ModerationInfo[]> => {
+  const init = {
+    method: "POST",
+    body: JSON.stringify({
+      jsonrpc: "1.0.0",
+      method: "img_proxy_describe",
+      params: {
+        urls: ["*"],
+      },
+    }),
+    headers: {
+      apikey: config.apikey,
+    },
+  };
+  const res: ModerationInfo[] = await fetch(`${config.proxyURL}`, init).then(
+    (res) =>
+      res
+        .json()
+        .then((json) =>
+          json.result.map((entry: any, i: number) => ({ ...entry, index: i }))
+        )
+  );
+
+  return res;
+};
+
+export const getMetrics = async () => {
+  return fetch(`${config.proxyURL}/metrics`).then((d) =>
+    d.text().then((raw) => parsePrometheusTextFormat(raw))
+  );
 };
