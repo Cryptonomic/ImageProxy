@@ -9,7 +9,7 @@ services:
     networks:
       - proxy-net
     ports:
-      - 3000:3000
+      - ${PORT:-3000}:3000
     volumes:
       - "./proxy.conf:/opt/img_proxy/proxy.conf"
       - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
