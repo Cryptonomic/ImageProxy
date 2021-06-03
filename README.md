@@ -145,6 +145,56 @@ The response should look like:
 }
 ```
 
+To integrate this with your typescript / javascript project, one can write a fetch function as shown below. Note that we are planning on releasing an NPM library to manage all this:
+
+```typescript
+interface ImageData {
+  blob: any
+}
+
+interface ModerationResponse {
+  jsonrpc: string
+  code: string
+  result: {
+    categories: string[]
+  }
+}
+
+async function fetch_from_proxy(url: string, force: Boolean): Promise<ImageData | ModerationResponse> {
+  let req = {
+    jsonrpc: '1.0.0',
+    method: 'img_proxy_fetch',
+    params: {
+      url: url,
+      force: force
+    }
+  };
+
+  let response = await fetch('https://imgproxy-preview.cryptonomic-infra.tech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json;charset=utf-8',
+      'apikey': '134472c4dd9118dbff1ed4e5fc7f1d056a0d690c9b6cc47c5c2453a011f57127'
+    },
+    body: JSON.stringify(req)
+  });
+
+  if (response.ok) {
+    if (response.headers.get('content-type') === 'application/json') {
+      console.log('Json Result');
+      return (await response.json()) as ModerationResponse;
+    }
+    else {
+      let blob = await response.blob();
+      return { blob: blob } as ImageData;
+    }
+  } else {
+    // throw error
+    throw Error("Error querying proxy");
+  }
+}
+```
+
 <br/>
 <br/>
 
