@@ -11,10 +11,9 @@ services:
       - proxy-net
     ports:
       - 3000:3000
-    # Uncomment the following if you want to use config different than the default
-    # volumes:    
-    #   - "./proxy.conf:/opt/img_proxy/proxy.conf"
-    #   - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
+    volumes:
+      - "./proxy.conf:/opt/img_proxy/proxy.conf"
+      - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
     depends_on:
       - database
   database:
