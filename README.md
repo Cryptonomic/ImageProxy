@@ -1,8 +1,7 @@
 # NFT Image Proxy
-Image Proxy for use with Tezos Wallets with support for content moderation.
+Image Proxy supporting automatic content moderation for use with Tezos Wallets and other applications in the ecosystem.
 
 The proxy supports the following features:
-
 1. Fetching images from either `HTTP` or `IPFS` urls. 
 1. The following image formats are supported: `bmp`, `jpg`, `png`, `tiff`, `gif`.
 1. Automatic content moderation by hooking with a moderation provider.
