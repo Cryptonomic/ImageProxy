@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import chevron from "../images/chevron.svg";
+import chevron from "../images/chevron.png";
 
 interface HeaderProps {
   hook: [any[], React.Dispatch<React.SetStateAction<any[]>>];

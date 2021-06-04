@@ -9,7 +9,7 @@ const ModerationTable: React.FC = () => {
   }, []);
   const headerStyles = "font-light text-left p-2";
   return (
-    <table className="table-fixed w-full m-8">
+    <table className="table-fixed w-full">
       <thead>
         <tr>
           <SortByHeader

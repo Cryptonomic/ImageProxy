@@ -21,7 +21,6 @@ WORKDIR /opt/img_proxy
 RUN apt-get update && apt-get upgrade -y && apt-get install ca-certificates -y && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/img_proxy/target/release/nft_image_proxy /opt/img_proxy/nft_image_proxy
 COPY --from=dashboard-builder /opt/dashboard/build/ /opt/img_proxy/ui
-RUN ls -al ./ui
 COPY proxy.conf /opt/img_proxy/
 COPY log4rs.yml /opt/img_proxy/
 CMD /opt/img_proxy/nft_image_proxy

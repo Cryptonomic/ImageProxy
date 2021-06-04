@@ -22,7 +22,7 @@ use std::io::prelude::*;
 use chrono::{DateTime, Utc};
 
 use hyper::{Body, Method, Request, Response, StatusCode};
-use log::error;
+use log::{error, warn};
 use procfs::process::Process;
 use prometheus::Encoder;
 use serde::de;
@@ -101,7 +101,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .body(Body::default())
             .unwrap_or_default()),
         (&Method::GET, "/info") => info().await,
-        (&Method::GET, "/admin") => admin().await,
+        (&Method::GET, "/admin") => get_file("index.html").await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => {
             metrics(&proxy.start_time).await
         }
@@ -138,25 +138,29 @@ async fn info() -> Result<Response<Body>, GenericError> {
 }
 
 async fn get_file(path: &str) -> Result<Response<Body>, GenericError> {
-    let mut f = File::open(format!("./ui/{}", path)).unwrap();
-    let mut source = Vec::new();
-    f.read_to_end(&mut source).unwrap();
-    let response = Response::builder()
-        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(Body::from(source))
-        .unwrap();
-    Ok(response)
-}
-
-async fn admin() -> Result<Response<Body>, GenericError> {
-    let mut f = File::open("./ui/index.html").unwrap();
-    let mut source = Vec::new();
-    f.read_to_end(&mut source).unwrap();
-    let response = Response::builder()
-        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(Body::from(source))
-        .unwrap();
-    Ok(response)
+    match File::open(format!("./ui/{}", path)) {
+        Ok(mut f) => {
+            let mut source = Vec::new();
+            match f.read_to_end(&mut source) {
+                Ok(_) => Ok(Response::builder()
+                    .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                    .body(Body::from(source))
+                    .unwrap_or_default()),
+                Err(e) => {
+                    error!("Unable to read {}", path);
+                    metrics::ERRORS.inc();
+                    Err(Box::new(e))
+                }
+            }
+        }
+        Err(_) => {
+            warn!("Unable to find {}", path);
+            Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::default())
+                .unwrap_or_default())
+        }
+    }
 }
 
 async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, GenericError> {

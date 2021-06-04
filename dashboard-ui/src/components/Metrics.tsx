@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getMetrics } from "../utils/ImageProxy";
-import info from "../images/information.svg";
+import info from "../images/information.png";
 
 const Block: React.FC<{
   title: string;
@@ -10,7 +10,7 @@ const Block: React.FC<{
 }> = ({ title, value, hint, units }) => {
   const [showToolTip, setShowing] = useState(false);
   return (
-    <div className="relative h-1/4 w-1/6 m-4 p-4 flex flex-col bg-background-dark rounded-lg transform transition hover:scale-95 ">
+    <div className="relative h-44 w-1/6 min-w-min m-4 p-4 flex flex-col bg-background-dark rounded-lg transform transition hover:scale-95 ">
       {hint && (
         <img
           src={info}
@@ -44,7 +44,7 @@ const Metrics = () => {
     metrics?.find((metric) => metric.name === name);
   console.log(metrics);
   return (
-    <div className="w-full h-full flex flex-wrap content-start p-4">
+    <div className="w-full h-full flex flex-wrap content-start">
       <Block
         title="Uptime"
         value={find("uptime")?.metrics[0].value}

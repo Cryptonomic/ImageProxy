@@ -1,17 +1,13 @@
-import { useEffect, useState } from "react";
 import Dashboard from "./components/Dashboard";
 import Navbar from "./components/Navbar";
 import Panel from "./components/Panel";
 import ReportTable from "./components/ReportTable";
 import ModerationTable from "./components/ModerationTable";
-import { getInfo, Info } from "./utils/ImageProxy";
 import Metrics from "./components/Metrics";
+import Configuration from "./components/Configuration";
+import Info from "./components/Info";
 
 function App() {
-  const [info, setInfo] = useState<Info>();
-  useEffect(() => {
-    getInfo().then((i) => setInfo(i));
-  }, []);
   return (
     <div className="flex flex-col h-full w-full bg-background">
       <Navbar />
@@ -25,10 +21,7 @@ function App() {
         ]}
       >
         <Panel>
-          <div className="my-12 m-8">
-            <div>Package Version: {info?.package_version} </div>
-            <div>Git Version: {info?.git_version} </div>
-          </div>
+          <Info />
         </Panel>
 
         <Panel>
@@ -43,7 +36,9 @@ function App() {
           <ModerationTable />
         </Panel>
 
-        <Panel />
+        <Panel>
+          <Configuration />
+        </Panel>
       </Dashboard>
     </div>
   );

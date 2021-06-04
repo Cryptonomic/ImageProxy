@@ -1,7 +1,7 @@
 import config from "../config.json";
 import parsePrometheusTextFormat from "parse-prometheus-text-format";
 
-export interface Info {
+export interface BuildInfo {
   package_version: string;
   git_version: string;
 }
@@ -22,7 +22,7 @@ export interface ModerationInfo {
   index: number;
 }
 
-export const getInfo = async (): Promise<Info> => {
+export const getInfo = async (): Promise<BuildInfo> => {
   return (await fetch(`${config.proxyURL}/info`)).json();
 };
 
