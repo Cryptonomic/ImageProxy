@@ -8,6 +8,7 @@ pub mod metrics;
 pub mod moderation;
 pub mod proxy;
 pub mod rpc;
+pub mod dns;
 
 use std::{convert::Infallible, sync::Arc};
 
