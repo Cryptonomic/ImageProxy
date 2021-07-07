@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use dns_lookup::lookup_host;
 
 /// A trait that allows one to use different DNS implementations
-trait Resolver {
+pub trait Resolver {
     fn resolve(&self, host: &str) -> Result<Vec<IpAddr>, std::io::Error>;
 }
 

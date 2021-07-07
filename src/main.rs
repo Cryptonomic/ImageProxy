@@ -1,14 +1,15 @@
+#![feature(ip)]
 extern crate tokio;
 
 pub mod aws;
 pub mod config;
 pub mod db;
+pub mod dns;
 pub mod document;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;
 pub mod rpc;
-pub mod dns;
 
 use std::{convert::Infallible, sync::Arc};
 
