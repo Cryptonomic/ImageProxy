@@ -157,7 +157,7 @@ impl Rekognition {
         }
     }
 
-    pub fn new(aws_region: &String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(aws_region: &String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {        
         Ok(Rekognition {
             region: aws_region.clone(),
             access_key: env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID key not set"),

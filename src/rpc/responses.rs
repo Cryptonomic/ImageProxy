@@ -21,6 +21,7 @@ pub enum StatusCodes {
     ModerationFailed,
     UnsupportedImageType,
     InternalError,
+    BlockedHost
 }
 
 #[derive(Default, Serialize)]

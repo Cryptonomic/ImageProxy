@@ -38,7 +38,10 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return Document::fetch(&proxy.config, req_id, &params.url)
+
+            return proxy
+                .http_client
+                .fetch(req_id, &params.url)
                 .await
                 .map(|d| d.to_response());
         }
@@ -72,7 +75,9 @@ impl Methods {
                     r.categories.clone(),
                 ))
             } else {
-                Document::fetch(&proxy.config, req_id, &params.url)
+                proxy
+                    .http_client
+                    .fetch(req_id, &params.url)
                     .await
                     .map(|d| d.to_response())
             }
@@ -81,7 +86,7 @@ impl Methods {
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            let document = Document::fetch(&proxy.config, req_id, &params.url).await?;
+            let document = proxy.http_client.fetch(req_id, &params.url).await?;
             let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
             if document_type == SupportedMimeTypes::Unsupported {

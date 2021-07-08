@@ -3,14 +3,15 @@ use std::net::IpAddr;
 use dns_lookup::lookup_host;
 
 /// A trait that allows one to use different DNS implementations
-pub trait Resolver {
+pub trait DnsResolver {
     fn resolve(&self, host: &str) -> Result<Vec<IpAddr>, std::io::Error>;
 }
 
 /// A DNS resolver based on the crate dns_lookup
+#[derive(Clone)]
 pub struct StandardDnsResolver {}
 
-impl Resolver for StandardDnsResolver {
+impl DnsResolver for StandardDnsResolver {
     fn resolve(&self, host: &str) -> Result<Vec<IpAddr>, std::io::Error> {
         lookup_host(host)
     }
@@ -21,14 +22,14 @@ pub struct DummyDnsResolver {
     pub resolved_address: Vec<IpAddr>,
 }
 
-impl Resolver for DummyDnsResolver {
+impl DnsResolver for DummyDnsResolver {
     fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, std::io::Error> {
         Ok(self.resolved_address.to_owned())
     }
 }
 
 #[cfg(test)]
-mod tests {    
+mod tests {
     use super::*;
 
     #[test]
