@@ -9,7 +9,7 @@ use crate::{
     config::Configuration,
     rpc::{
         requests::{DescribeRequest, FetchRequest, MethodHeader, ReportRequest, RpcMethods},
-        responses::{Info, RpcError},
+        responses::{Info, ServerError},
     },
 };
 use crate::{
@@ -73,7 +73,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
                 rpc(proxy, req).await.or_else(|e| {
                     metrics::ERRORS.inc();
-                    Ok(RpcError::to_response(e))
+                    Ok(ServerError::to_response(e))
                 })
             } else {
                 Ok(Response::builder()
@@ -104,7 +104,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     response.or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(RpcError::to_response(StatusCodes::InternalError))
+        Ok(ServerError::to_response(StatusCodes::InternalError))
     })
 }
 

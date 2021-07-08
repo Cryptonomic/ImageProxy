@@ -3,7 +3,7 @@ use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    aws::Rekognition, config::Configuration, document::Document, rpc::responses::StatusCodes,
+    aws::Rekognition, config::Configuration, document::Document, rpc::responses::ModerationStatus,
 };
 
 #[derive(PartialEq)]
@@ -54,7 +54,10 @@ pub struct ModerationResponse {
 /// A trait that all moderation services must implement
 #[async_trait]
 pub trait ModerationProvider: Send + Sync {
-    async fn moderate(self: &Self, document: &Document) -> Result<ModerationResponse, StatusCodes>;
+    async fn moderate(
+        self: &Self,
+        document: &Document,
+    ) -> Result<ModerationResponse, ModerationStatus>;
     fn supported_types(self: &Self) -> Vec<SupportedMimeTypes>;
     fn max_document_size(self: &Self) -> u64;
 }
@@ -64,7 +67,7 @@ pub struct NullProvider {}
 
 #[async_trait]
 impl ModerationProvider for NullProvider {
-    async fn moderate(self: &Self, _: &Document) -> Result<ModerationResponse, StatusCodes> {
+    async fn moderate(self: &Self, _: &Document) -> Result<ModerationResponse, ModerationStatus> {
         Ok(ModerationResponse {
             categories: Vec::new(),
             provider: ModerationService::None,

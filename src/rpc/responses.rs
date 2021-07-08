@@ -12,15 +12,20 @@ pub enum StatusCodes {
     Ok,
     InvalidRpcVersionError,
     InvalidRpcMethodError,
-    InvalidUri,
-    UnsupportedUriScheme,
     JsonDecodeError,
-    DocumentBlocked,
-    DocumentFetchFailed,
-    DocumentNotFound,
+    InternalError,
+}
+
+#[derive(Serialize)]
+pub enum ModerationStatus {
+    Allowed,
+    Blocked,
+    FetchFailed,
+    NotFound,
     ModerationFailed,
     UnsupportedImageType,
-    InternalError,
+    UnsupportedUriScheme,
+    InvalidUri,
 }
 
 #[derive(Default, Serialize)]
@@ -31,13 +36,14 @@ pub struct Info {
 
 #[derive(Serialize)]
 pub struct ModerationResult {
+    pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
 }
 
 #[derive(Serialize)]
 pub struct FetchResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub server_code: StatusCodes,
     pub result: ModerationResult,
 }
 
@@ -59,7 +65,7 @@ pub struct DescribeResult {
 #[derive(Serialize)]
 pub struct DescribeResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub server_code: StatusCodes,
     pub result: Vec<DescribeResult>,
 }
 
@@ -72,7 +78,7 @@ pub struct ReportResult {
 #[derive(Serialize)]
 pub struct ReportResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub server_code: StatusCodes,
     pub result: ReportResult,
 }
 
@@ -86,23 +92,27 @@ pub struct ReportDescribeResult {
 #[derive(Serialize)]
 pub struct ReportDescribeResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub server_code: StatusCodes,
     pub result: Vec<ReportDescribeResult>,
 }
 
-// Rpc Error
 #[derive(Serialize)]
-pub struct RpcError {
+pub struct ServerError {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub server_code: StatusCodes,
 }
 
 impl FetchResponse {
-    pub fn to_response(code: StatusCodes, categories: Vec<ModerationCategories>) -> Response<Body> {
+    pub fn to_response(
+        server_code: StatusCodes,
+        moderation_status: ModerationStatus,
+        categories: Vec<ModerationCategories>,
+    ) -> Response<Body> {
         let result = FetchResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            server_code,
             result: ModerationResult {
+                moderation_status,
                 categories: categories.clone(),
             },
         };
@@ -115,17 +125,20 @@ impl FetchResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                ServerError::to_response(StatusCodes::InternalError)
             }
         }
     }
 }
 
 impl DescribeResponse {
-    pub fn to_response(code: StatusCodes, describe_results: Vec<DescribeResult>) -> Response<Body> {
+    pub fn to_response(
+        server_code: StatusCodes,
+        describe_results: Vec<DescribeResult>,
+    ) -> Response<Body> {
         let result = DescribeResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            server_code,
             result: describe_results,
         };
 
@@ -137,17 +150,17 @@ impl DescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                ServerError::to_response(StatusCodes::InternalError)
             }
         }
     }
 }
 
 impl ReportResponse {
-    pub fn to_response(code: StatusCodes, url: &str, id: &Uuid) -> Response<Body> {
+    pub fn to_response(server_code: StatusCodes, url: &str, id: &Uuid) -> Response<Body> {
         let result = ReportResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            server_code,
             result: ReportResult {
                 url: String::from(url),
                 id: id.clone(),
@@ -162,17 +175,20 @@ impl ReportResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                ServerError::to_response(StatusCodes::InternalError)
             }
         }
     }
 }
 
 impl ReportDescribeResponse {
-    pub fn to_response(code: StatusCodes, results: Vec<ReportDescribeResult>) -> Response<Body> {
+    pub fn to_response(
+        server_code: StatusCodes,
+        results: Vec<ReportDescribeResult>,
+    ) -> Response<Body> {
         let result = ReportDescribeResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            server_code,
             result: results,
         };
 
@@ -184,17 +200,17 @@ impl ReportDescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                ServerError::to_response(StatusCodes::InternalError)
             }
         }
     }
 }
 
-impl RpcError {
-    pub fn to_response(code: StatusCodes) -> Response<Body> {
-        let result = RpcError {
+impl ServerError {
+    pub fn to_response(server_code: StatusCodes) -> Response<Body> {
+        let result = ServerError {
             jsonrpc: String::from(VERSION),
-            code,
+            server_code,
         };
         let body = serde_json::to_string_pretty(&result)
             .unwrap_or_default()

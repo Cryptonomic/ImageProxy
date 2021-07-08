@@ -38,9 +38,10 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return Document::fetch(&proxy.config, req_id, &params.url)
-                .await
-                .map(|d| d.to_response());
+            return match Document::fetch(&proxy.config, req_id, &params.url).await {
+                Ok(doc) => Ok(doc.to_response()),
+                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+            };
         }
 
         let urls = vec![params.url.clone()];
@@ -68,62 +69,85 @@ impl Methods {
             // Send an appropriate response if moderation indicates content is blocked
             if r.blocked {
                 Ok(FetchResponse::to_response(
-                    StatusCodes::DocumentBlocked,
+                    StatusCodes::Ok,
+                    ModerationStatus::Blocked,
                     r.categories.clone(),
                 ))
             } else {
-                Document::fetch(&proxy.config, req_id, &params.url)
-                    .await
-                    .map(|d| d.to_response())
+                match Document::fetch(&proxy.config, req_id, &params.url).await {
+                    Ok(doc) => Ok(doc.to_response()),
+                    Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                }
             }
         } else {
             metrics::CACHE_MISS.inc();
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            let document = Document::fetch(&proxy.config, req_id, &params.url).await?;
-            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            match Document::fetch(&proxy.config, req_id, &params.url).await {
+                Ok(document) => {
+                    let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
-            if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(FetchResponse::to_response(
-                    StatusCodes::UnsupportedImageType,
-                    Vec::new(),
-                ));
-            }
+                    if document_type == SupportedMimeTypes::Unsupported {
+                        return Ok(FetchResponse::to_response(
+                            StatusCodes::Ok,
+                            ModerationStatus::UnsupportedImageType,
+                            Vec::new(),
+                        ));
+                    }
 
-            let max_document_size = proxy.moderation_provider.max_document_size();
-            let supported_types = proxy.moderation_provider.supported_types();
+                    let max_document_size = proxy.moderation_provider.max_document_size();
+                    let supported_types = proxy.moderation_provider.supported_types();
 
-            metrics::MODERATION_REQUESTS.inc();
+                    metrics::MODERATION_REQUESTS.inc();
 
-            // Resize the image if required or reformat to png if required
-            let mr = if document.content_length >= max_document_size
-                || !supported_types.contains(&document_type)
-            {
-                let resized_doc = document.resize_image(document_type, max_document_size)?;
-                proxy.moderation_provider.moderate(&resized_doc).await?
-            } else {
-                proxy.moderation_provider.moderate(&document).await?
-            };
+                    // Resize the image if required or reformat to png if required
+                    let formatted = if document.content_length >= max_document_size
+                        || !supported_types.contains(&document_type)
+                    {
+                        let resized_doc =
+                            document.resize_image(document_type, max_document_size)?;
+                        proxy.moderation_provider.moderate(&resized_doc).await
+                    } else {
+                        proxy.moderation_provider.moderate(&document).await
+                    };
 
-            let blocked = mr.categories.len() > 0;
-            match proxy
-                .database
-                .add_moderation_result(&params.url, mr.provider, blocked, &mr.categories)
-                .await
-            {
-                Ok(_) => info!("Database updated for id={}", req_id),
-                Err(e) => error!("Database not updated for id={}, reason={}", req_id, e),
-            }
+                    match formatted {
+                        Ok(mr) => {
+                            let blocked = mr.categories.len() > 0;
+                            match proxy
+                                .database
+                                .add_moderation_result(
+                                    &params.url,
+                                    mr.provider,
+                                    blocked,
+                                    &mr.categories,
+                                )
+                                .await
+                            {
+                                Ok(_) => info!("Database updated for id={}", req_id),
+                                Err(e) => {
+                                    error!("Database not updated for id={}, reason={}", req_id, e)
+                                }
+                            }
 
-            if blocked {
-                metrics::DOCUMENTS_BLOCKED.inc();
-                Ok(FetchResponse::to_response(
-                    StatusCodes::DocumentBlocked,
-                    mr.categories.clone(),
-                ))
-            } else {
-                Ok(document.to_response())
+                            if blocked {
+                                metrics::DOCUMENTS_BLOCKED.inc();
+                                Ok(FetchResponse::to_response(
+                                    StatusCodes::Ok,
+                                    ModerationStatus::Blocked,
+                                    mr.categories.clone(),
+                                ))
+                            } else {
+                                Ok(document.to_response())
+                            }
+                        }
+                        Err(e) => {
+                            return Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new()))
+                        }
+                    }
+                }
+                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
             }
         }
     }
