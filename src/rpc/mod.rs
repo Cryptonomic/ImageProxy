@@ -6,6 +6,7 @@ use std::sync::Arc;
 use hyper::Body;
 use hyper::Response;
 use log::{error, info, warn};
+use rustc_serialize::hex::ToHex;
 use uuid::Uuid;
 
 use crate::{
@@ -38,9 +39,23 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return match Document::fetch(&proxy.config, req_id, &params.url).await {
-                Ok(doc) => Ok(doc.to_response()),
-                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+            return match (
+                Document::fetch(&proxy.config, req_id, &params.url).await,
+                &params.data,
+            ) {
+                (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                    StatusCodes::Ok,
+                    ModerationStatus::Allowed,
+                    Vec::new(),
+                    Some(doc.bytes.to_hex()),
+                )),
+                (Err(e), _) => Ok(FetchResponse::to_response(
+                    StatusCodes::Ok,
+                    e,
+                    Vec::new(),
+                    None,
+                )),
             };
         }
 
@@ -72,11 +87,26 @@ impl Methods {
                     StatusCodes::Ok,
                     ModerationStatus::Blocked,
                     r.categories.clone(),
+                    None,
                 ))
             } else {
-                match Document::fetch(&proxy.config, req_id, &params.url).await {
-                    Ok(doc) => Ok(doc.to_response()),
-                    Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                match (
+                    Document::fetch(&proxy.config, req_id, &params.url).await,
+                    &params.data,
+                ) {
+                    (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                    (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                        StatusCodes::Ok,
+                        ModerationStatus::Allowed,
+                        Vec::new(),
+                        Some(doc.bytes.to_hex()),
+                    )),
+                    (Err(e), _) => Ok(FetchResponse::to_response(
+                        StatusCodes::Ok,
+                        e,
+                        Vec::new(),
+                        None,
+                    )),
                 }
             }
         } else {
@@ -93,6 +123,7 @@ impl Methods {
                             StatusCodes::Ok,
                             ModerationStatus::UnsupportedImageType,
                             Vec::new(),
+                            None,
                         ));
                     }
 
@@ -137,17 +168,36 @@ impl Methods {
                                     StatusCodes::Ok,
                                     ModerationStatus::Blocked,
                                     mr.categories.clone(),
+                                    None,
                                 ))
                             } else {
-                                Ok(document.to_response())
+                                match params.data {
+                                    ResponseType::Raw => Ok(document.to_response()),
+                                    ResponseType::Json => Ok(FetchResponse::to_response(
+                                        StatusCodes::Ok,
+                                        ModerationStatus::Allowed,
+                                        Vec::new(),
+                                        Some(document.bytes.to_hex()),
+                                    )),
+                                }
                             }
                         }
                         Err(e) => {
-                            return Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new()))
+                            return Ok(FetchResponse::to_response(
+                                StatusCodes::Ok,
+                                e,
+                                Vec::new(),
+                                None,
+                            ))
                         }
                     }
                 }
-                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                Err(e) => Ok(FetchResponse::to_response(
+                    StatusCodes::Ok,
+                    e,
+                    Vec::new(),
+                    None,
+                )),
             }
         }
     }

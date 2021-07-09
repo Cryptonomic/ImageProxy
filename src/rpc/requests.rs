@@ -19,9 +19,17 @@ pub struct MethodHeader {
 
 // Fetch method struct
 #[derive(Deserialize)]
+pub enum ResponseType {
+    Json,
+    Raw,
+}
+
+// Fetch method struct
+#[derive(Deserialize)]
 pub struct FetchRequestParams {
     pub url: String,
     pub force: bool,
+    pub data: ResponseType,
 }
 
 #[derive(Deserialize)]

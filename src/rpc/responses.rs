@@ -38,6 +38,7 @@ pub struct Info {
 pub struct ModerationResult {
     pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
+    pub data: String,
 }
 
 #[derive(Serialize)]
@@ -107,6 +108,7 @@ impl FetchResponse {
         server_code: StatusCodes,
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
+        data: Option<String>,
     ) -> Response<Body> {
         let result = FetchResponse {
             jsonrpc: String::from(VERSION),
@@ -114,6 +116,10 @@ impl FetchResponse {
             result: ModerationResult {
                 moderation_status,
                 categories: categories.clone(),
+                data: match data {
+                    Some(d) => d,
+                    None => String::new(),
+                },
             },
         };
 
