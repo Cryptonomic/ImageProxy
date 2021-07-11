@@ -47,11 +47,11 @@ impl Methods {
             ) {
                 (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                 (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     ModerationStatus::Allowed,
                     Vec::new(),
                     Some(doc.bytes.to_hex()),
-		    req_id.clone()
+                    req_id,
                 )),
                 (Err(e), _) => Ok(e.to_response(req_id.clone())),
             };
@@ -85,7 +85,7 @@ impl Methods {
                     RpcStatus::Ok,
                     ModerationStatus::Blocked,
                     r.categories.clone(),
-		    None,
+                    None,
                     req_id,
                 ))
             } else {
@@ -95,13 +95,13 @@ impl Methods {
                 ) {
                     (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                     (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
-                        StatusCodes::Ok,
+                        RpcStatus::Ok,
                         ModerationStatus::Allowed,
                         Vec::new(),
                         Some(doc.bytes.to_hex()),
-			req_id.clone()
+                        req_id,
                     )),
-                    (Err(e), _) => Ok(e.to_response(req_id.clone()))),
+                    (Err(e), _) => Ok(e.to_response(req_id.clone())),
                 }
             }
         } else {
@@ -159,17 +159,17 @@ impl Methods {
                                     ModerationStatus::Blocked,
                                     mr.categories.clone(),
                                     None,
-				    req_id
+                                    req_id,
                                 ))
                             } else {
                                 match params.data {
                                     ResponseType::Raw => Ok(document.to_response()),
                                     ResponseType::Json => Ok(FetchResponse::to_response(
-                                        StatusCodes::Ok,
+                                        RpcStatus::Ok,
                                         ModerationStatus::Allowed,
                                         Vec::new(),
                                         Some(document.bytes.to_hex()),
-					req_id.clone()
+                                        req_id,
                                     )),
                                 }
                             }

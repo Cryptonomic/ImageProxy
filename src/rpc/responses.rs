@@ -34,6 +34,13 @@ pub struct ModerationResult {
 }
 
 #[derive(Serialize)]
+pub struct ErrorResponse {
+    pub jsonrpc: String,
+    pub rpc_status: RpcStatus,
+    pub error: RpcError,
+}
+
+#[derive(Serialize)]
 pub struct FetchResponse {
     pub jsonrpc: String,
     pub rpc_status: RpcStatus,
