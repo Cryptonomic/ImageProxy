@@ -7,7 +7,6 @@ use std::sync::Arc;
 use hyper::Body;
 use hyper::Response;
 use log::{error, info, warn};
-use rustc_serialize::hex::ToHex;
 use uuid::Uuid;
 
 use crate::{
@@ -50,7 +49,7 @@ impl Methods {
                     RpcStatus::Ok,
                     ModerationStatus::Allowed,
                     Vec::new(),
-                    Some(doc.bytes.to_hex()),
+                    Some(doc.to_url()),
                     req_id,
                 )),
                 (Err(e), _) => Ok(e.to_response(req_id.clone())),
@@ -98,7 +97,7 @@ impl Methods {
                         RpcStatus::Ok,
                         ModerationStatus::Allowed,
                         Vec::new(),
-                        Some(doc.bytes.to_hex()),
+                        Some(doc.to_url()),
                         req_id,
                     )),
                     (Err(e), _) => Ok(e.to_response(req_id.clone())),
@@ -168,7 +167,7 @@ impl Methods {
                                         RpcStatus::Ok,
                                         ModerationStatus::Allowed,
                                         Vec::new(),
-                                        Some(document.bytes.to_hex()),
+                                        Some(document.to_url()),
                                         req_id,
                                     )),
                                 }
