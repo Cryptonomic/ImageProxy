@@ -20,7 +20,7 @@ use util::{get_signature_key, hash, sign};
 use crate::{
     document::Document,
     moderation::{ModerationProvider, ModerationResponse, ModerationService, SupportedMimeTypes},
-    rpc::responses::ModerationStatus,
+    rpc::errors::ImgProxyError,
 };
 
 pub struct Rekognition {
@@ -34,7 +34,7 @@ impl ModerationProvider for Rekognition {
     async fn moderate(
         self: &Self,
         document: &Document,
-    ) -> Result<crate::moderation::ModerationResponse, ModerationStatus> {
+    ) -> Result<crate::moderation::ModerationResponse, ImgProxyError> {
         debug!("New Rekognition request");
         match self.get_moderation_labels(&document.bytes).await {
             Ok(result) => {
@@ -50,7 +50,7 @@ impl ModerationProvider for Rekognition {
             }
             Err(e) => {
                 error!("Moderation failed, reason:{}", e);
-                Err(ModerationStatus::ModerationFailed)
+                Err(ImgProxyError::ModerationFailed)
             }
         }
     }

@@ -1,3 +1,4 @@
+pub mod errors;
 pub mod requests;
 pub mod responses;
 
@@ -13,6 +14,7 @@ use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
     proxy::Proxy,
+    rpc::errors::ImgProxyError,
 };
 
 use requests::*;
@@ -28,7 +30,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &FetchRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, ImgProxyError> {
         info!(
             "New document fetch request, id={}, force={}, url={}",
             req_id, params.force, params.url
@@ -40,7 +42,7 @@ impl Methods {
             metrics::DOCUMENTS_FORCED.inc();
             return match Document::fetch(&proxy.config, req_id, &params.url).await {
                 Ok(doc) => Ok(doc.to_response()),
-                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                Err(e) => Ok(e.to_response(req_id.clone())),
             };
         }
 
@@ -69,14 +71,15 @@ impl Methods {
             // Send an appropriate response if moderation indicates content is blocked
             if r.blocked {
                 Ok(FetchResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     ModerationStatus::Blocked,
                     r.categories.clone(),
+                    req_id,
                 ))
             } else {
                 match Document::fetch(&proxy.config, req_id, &params.url).await {
                     Ok(doc) => Ok(doc.to_response()),
-                    Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                    Err(e) => Ok(e.to_response(req_id.clone())),
                 }
             }
         } else {
@@ -89,11 +92,7 @@ impl Methods {
                     let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
                     if document_type == SupportedMimeTypes::Unsupported {
-                        return Ok(FetchResponse::to_response(
-                            StatusCodes::Ok,
-                            ModerationStatus::UnsupportedImageType,
-                            Vec::new(),
-                        ));
+                        return Ok(ImgProxyError::UnsupportedImageType.to_response(req_id.clone()));
                     }
 
                     let max_document_size = proxy.moderation_provider.max_document_size();
@@ -134,20 +133,19 @@ impl Methods {
                             if blocked {
                                 metrics::DOCUMENTS_BLOCKED.inc();
                                 Ok(FetchResponse::to_response(
-                                    StatusCodes::Ok,
+                                    RpcStatus::Ok,
                                     ModerationStatus::Blocked,
                                     mr.categories.clone(),
+                                    req_id,
                                 ))
                             } else {
                                 Ok(document.to_response())
                             }
                         }
-                        Err(e) => {
-                            return Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new()))
-                        }
+                        Err(e) => return Ok(e.to_response(req_id.clone())),
                     }
                 }
-                Err(e) => Ok(FetchResponse::to_response(StatusCodes::Ok, e, Vec::new())),
+                Err(e) => Ok(e.to_response(req_id.clone())),
             }
         }
     }
@@ -156,7 +154,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &DescribeRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, ImgProxyError> {
         metrics::API_REQUESTS_DESCRIBE.inc();
         info!(
             "New describe request, id={}, urls={:?}",
@@ -191,13 +189,14 @@ impl Methods {
                     })
                     .collect();
                 Ok(DescribeResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     describe_results,
+                    req_id,
                 ))
             }
             Err(e) => {
                 error!("Error querying database for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(ImgProxyError::InternalError)
             }
         }
     }
@@ -206,7 +205,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &ReportRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, ImgProxyError> {
         metrics::API_REQUESTS_REPORT.inc();
         info!("New report request, id={}, url={}", req_id, params.url);
         match proxy
@@ -215,13 +214,13 @@ impl Methods {
             .await
         {
             Ok(_) => Ok(ReportResponse::to_response(
-                StatusCodes::Ok,
+                RpcStatus::Ok,
                 &params.url,
                 req_id,
             )),
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(ImgProxyError::InternalError)
             }
         }
     }
@@ -229,7 +228,7 @@ impl Methods {
     pub async fn describe_report(
         proxy: Arc<Proxy>,
         req_id: &Uuid,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, ImgProxyError> {
         info!("New report describe request, id={}", req_id);
         match proxy.database.get_reports().await {
             Ok(rows) => {
@@ -243,13 +242,14 @@ impl Methods {
                     })
                     .collect();
                 Ok(ReportDescribeResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     results,
+                    req_id,
                 ))
             }
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(ImgProxyError::InternalError)
             }
         }
     }
