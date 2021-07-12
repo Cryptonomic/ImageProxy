@@ -29,7 +29,7 @@ pub enum ResponseType {
 pub struct FetchRequestParams {
     pub url: String,
     pub force: bool,
-    pub data: ResponseType,
+    pub response_type: ResponseType,
 }
 
 #[derive(Deserialize)]

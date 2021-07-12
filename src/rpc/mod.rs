@@ -1,4 +1,4 @@
-pub mod errors;
+pub mod error;
 pub mod requests;
 pub mod responses;
 
@@ -14,7 +14,7 @@ use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
     proxy::Proxy,
-    rpc::errors::ImgProxyError,
+    rpc::error::Errors,
 };
 
 use requests::*;
@@ -30,7 +30,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &FetchRequestParams,
-    ) -> Result<Response<Body>, ImgProxyError> {
+    ) -> Result<Response<Body>, Errors> {
         info!(
             "New document fetch request, id={}, force={}, url={}",
             req_id, params.force, params.url
@@ -42,7 +42,7 @@ impl Methods {
             metrics::DOCUMENTS_FORCED.inc();
             return match (
                 Document::fetch(&proxy.config, req_id, &params.url).await,
-                &params.data,
+                &params.response_type,
             ) {
                 (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                 (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
@@ -90,7 +90,7 @@ impl Methods {
             } else {
                 match (
                     Document::fetch(&proxy.config, req_id, &params.url).await,
-                    &params.data,
+                    &params.response_type,
                 ) {
                     (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                     (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
@@ -113,7 +113,7 @@ impl Methods {
                     let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
                     if document_type == SupportedMimeTypes::Unsupported {
-                        return Ok(ImgProxyError::UnsupportedImageType.to_response(req_id.clone()));
+                        return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
                     }
 
                     let max_document_size = proxy.moderation_provider.max_document_size();
@@ -161,7 +161,7 @@ impl Methods {
                                     req_id,
                                 ))
                             } else {
-                                match params.data {
+                                match params.response_type {
                                     ResponseType::Raw => Ok(document.to_response()),
                                     ResponseType::Json => Ok(FetchResponse::to_response(
                                         RpcStatus::Ok,
@@ -185,7 +185,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &DescribeRequestParams,
-    ) -> Result<Response<Body>, ImgProxyError> {
+    ) -> Result<Response<Body>, Errors> {
         metrics::API_REQUESTS_DESCRIBE.inc();
         info!(
             "New describe request, id={}, urls={:?}",
@@ -227,7 +227,7 @@ impl Methods {
             }
             Err(e) => {
                 error!("Error querying database for id={}, reason={}", req_id, e);
-                Err(ImgProxyError::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -236,7 +236,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &ReportRequestParams,
-    ) -> Result<Response<Body>, ImgProxyError> {
+    ) -> Result<Response<Body>, Errors> {
         metrics::API_REQUESTS_REPORT.inc();
         info!("New report request, id={}, url={}", req_id, params.url);
         match proxy
@@ -251,7 +251,7 @@ impl Methods {
             )),
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(ImgProxyError::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -259,7 +259,7 @@ impl Methods {
     pub async fn describe_report(
         proxy: Arc<Proxy>,
         req_id: &Uuid,
-    ) -> Result<Response<Body>, ImgProxyError> {
+    ) -> Result<Response<Body>, Errors> {
         info!("New report describe request, id={}", req_id);
         match proxy.database.get_reports().await {
             Ok(rows) => {
@@ -280,7 +280,7 @@ impl Methods {
             }
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(ImgProxyError::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
