@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "npm run test"
+    "test": ""
   },
   "repository": {
     "type": "git",
@@ -18,12 +18,9 @@
     "NFT"
   ],
   "author": "Cryptonomic",
-  "license": "ISC",
+  "license": "Apache",
   "bugs": {
     "url": "https://github.com/Cryptonomic/ImageProxy/issues"
   },
-  "homepage": "https://github.com/Cryptonomic/ImageProxy#readme",
-  "dependencies": {
-    "node-fetch": "^2.6.1"
-  }
+  "homepage": "https://github.com/Cryptonomic/ImageProxy#readme"
 }
