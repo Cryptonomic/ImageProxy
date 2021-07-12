@@ -40,9 +40,19 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return match Document::fetch(&proxy.config, req_id, &params.url).await {
-                Ok(doc) => Ok(doc.to_response()),
-                Err(e) => Ok(e.to_response(req_id.clone())),
+            return match (
+                Document::fetch(&proxy.config, req_id, &params.url).await,
+                &params.response_type,
+            ) {
+                (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                    RpcStatus::Ok,
+                    ModerationStatus::Allowed,
+                    Vec::new(),
+                    Some(doc.to_url()),
+                    req_id,
+                )),
+                (Err(e), _) => Ok(e.to_response(req_id.clone())),
             };
         }
 
@@ -74,12 +84,23 @@ impl Methods {
                     RpcStatus::Ok,
                     ModerationStatus::Blocked,
                     r.categories.clone(),
+                    None,
                     req_id,
                 ))
             } else {
-                match Document::fetch(&proxy.config, req_id, &params.url).await {
-                    Ok(doc) => Ok(doc.to_response()),
-                    Err(e) => Ok(e.to_response(req_id.clone())),
+                match (
+                    Document::fetch(&proxy.config, req_id, &params.url).await,
+                    &params.response_type,
+                ) {
+                    (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                    (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                        RpcStatus::Ok,
+                        ModerationStatus::Allowed,
+                        Vec::new(),
+                        Some(doc.to_url()),
+                        req_id,
+                    )),
+                    (Err(e), _) => Ok(e.to_response(req_id.clone())),
                 }
             }
         } else {
@@ -136,10 +157,20 @@ impl Methods {
                                     RpcStatus::Ok,
                                     ModerationStatus::Blocked,
                                     mr.categories.clone(),
+                                    None,
                                     req_id,
                                 ))
                             } else {
-                                Ok(document.to_response())
+                                match params.response_type {
+                                    ResponseType::Raw => Ok(document.to_response()),
+                                    ResponseType::Json => Ok(FetchResponse::to_response(
+                                        RpcStatus::Ok,
+                                        ModerationStatus::Allowed,
+                                        Vec::new(),
+                                        Some(document.to_url()),
+                                        req_id,
+                                    )),
+                                }
                             }
                         }
                         Err(e) => return Ok(e.to_response(req_id.clone())),

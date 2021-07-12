@@ -1,3 +1,4 @@
+extern crate base64;
 extern crate hyper;
 
 use std::io::Cursor;
@@ -8,6 +9,9 @@ use crate::{
     moderation::SupportedMimeTypes,
     rpc::error::Errors,
 };
+
+use base64::encode;
+
 use hyper::Client;
 use hyper::{
     body::{to_bytes, Bytes},
@@ -182,5 +186,13 @@ impl Document {
             .header(hyper::header::CONTENT_LENGTH, self.bytes.len())
             .body(Body::from(self.bytes.clone()))
             .unwrap_or_default()
+    }
+
+    pub fn to_url(&self) -> String {
+        format!(
+            "data:{};base64,{}",
+            self.content_type,
+            encode(self.bytes.to_vec())
+        )
     }
 }

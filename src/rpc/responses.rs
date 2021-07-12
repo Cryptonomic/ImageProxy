@@ -30,6 +30,7 @@ pub struct Info {
 pub struct ModerationResult {
     pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
+    pub data: String,
 }
 
 #[derive(Serialize)]
@@ -106,6 +107,7 @@ impl FetchResponse {
         rpc_status: RpcStatus,
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
+        data: Option<String>,
         req_id: &Uuid,
     ) -> Response<Body> {
         let result = FetchResponse {
@@ -114,6 +116,7 @@ impl FetchResponse {
             result: ModerationResult {
                 moderation_status,
                 categories: categories.clone(),
+                data: data.unwrap_or(String::new()),
             },
         };
 
