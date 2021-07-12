@@ -116,10 +116,7 @@ impl FetchResponse {
             result: ModerationResult {
                 moderation_status,
                 categories: categories.clone(),
-                data: match data {
-                    Some(d) => d,
-                    None => String::new(),
-                },
+                data: data.unwrap_or(String::new()),
             },
         };
 
