@@ -4,7 +4,7 @@ extern crate tokio_postgres;
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
-use crate::{built_info, rpc::errors::ImgProxyError};
+use crate::{built_info, rpc::error::Errors};
 use crate::{
     config::Configuration,
     rpc::{
@@ -105,7 +105,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     response.or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(ImgProxyError::InternalError.to_response(Uuid::new_v4()))
+        Ok(Errors::InternalError.to_response(Uuid::new_v4()))
     })
 }
 
@@ -153,12 +153,12 @@ async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, G
     )))
 }
 
-fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, ImgProxyError> {
+fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
     match serde_json::from_slice::<T>(&body) {
         Ok(o) => Ok(o),
         Err(e) => {
             error!("Json decode error, reason:{}", e);
-            Err(ImgProxyError::JsonDecodeError)
+            Err(Errors::JsonDecodeError)
         }
     }
 }
@@ -167,7 +167,7 @@ async fn rpc(
     proxy: Arc<Proxy>,
     req: Request<Body>,
     req_id: Uuid,
-) -> Result<Response<Body>, ImgProxyError> {
+) -> Result<Response<Body>, Errors> {
     metrics::API_REQUESTS.inc();
     match hyper::body::to_bytes(req.into_body()).await {
         Ok(body) => match decode::<MethodHeader>(&body) {
@@ -188,12 +188,12 @@ async fn rpc(
                     Methods::describe_report(proxy, &req_id).await
                 }
             },
-            Ok(_) => Err(ImgProxyError::InvalidRpcVersionError),
+            Ok(_) => Err(Errors::InvalidRpcVersionError),
             Err(e) => Err(e),
         },
         Err(e) => {
             error!("Unable to obtain request body, reason:{}", e);
-            Err(ImgProxyError::InternalError)
+            Err(Errors::InternalError)
         }
     }
 }

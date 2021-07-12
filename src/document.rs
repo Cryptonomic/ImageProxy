@@ -6,7 +6,7 @@ use crate::{
     config::{Configuration, Host},
     metrics,
     moderation::SupportedMimeTypes,
-    rpc::errors::ImgProxyError,
+    rpc::error::Errors,
 };
 use hyper::Client;
 use hyper::{
@@ -28,12 +28,12 @@ pub struct Document {
 }
 
 impl Document {
-    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, ImgProxyError> {
+    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, Errors> {
         match url {
             u if u.starts_with("http://") | u.starts_with("https://") => {
                 u.parse::<Uri>().map_err(|e| {
                     error!("Error parsing url={}, reason={}", u, e);
-                    ImgProxyError::InvalidUri
+                    Errors::InvalidUri
                 })
             }
             u if u.starts_with("ipfs://") => {
@@ -49,14 +49,14 @@ impl Document {
                 debug!("Ipfs gateway path: {}", gateway_url);
                 gateway_url.parse::<Uri>().map_err(|e| {
                     error!("Error parsing url={}, reason={}", u, e);
-                    ImgProxyError::InvalidUri
+                    Errors::InvalidUri
                 })
             }
-            _ => Err(ImgProxyError::UnsupportedUriScheme),
+            _ => Err(Errors::UnsupportedUriScheme),
         }
     }
 
-    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, ImgProxyError> {
+    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, Errors> {
         let cursor = Cursor::new(&self.bytes);
         let img = match image_type {
             SupportedMimeTypes::ImageBmp => image::load(cursor, ImageFormat::Bmp),
@@ -68,7 +68,7 @@ impl Document {
         };
         img.or_else(|e| {
             error!("Unable to open image, reason={}", e);
-            Err(ImgProxyError::InternalError)
+            Err(Errors::InternalError)
         })
     }
 
@@ -76,7 +76,7 @@ impl Document {
         &self,
         image_type: SupportedMimeTypes,
         max_size: u64,
-    ) -> Result<Document, ImgProxyError> {
+    ) -> Result<Document, Errors> {
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
         let scale = self.content_length as f64 / max_size as f64;
@@ -98,7 +98,7 @@ impl Document {
             }),
             Err(e) => {
                 error!("Error writing out image to buffer, reason={}", e);
-                Err(ImgProxyError::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -107,7 +107,7 @@ impl Document {
         config: &Configuration,
         req_id: &Uuid,
         url: &String,
-    ) -> Result<Document, ImgProxyError> {
+    ) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
         let uri = Document::to_uri(&config.ipfs, url)?;
         let https = HttpsConnector::new();
@@ -133,7 +133,7 @@ impl Document {
                         .unwrap_or("".to_string());
                     let bytes = to_bytes(response.into_body()).await.map_err(|e| {
                         error!("Error retrieving document body, reason={}", e);
-                        ImgProxyError::FetchFailed
+                        Errors::FetchFailed
                     })?;
 
                     info!(
@@ -156,7 +156,7 @@ impl Document {
                 hyper::StatusCode::NOT_FOUND => {
                     metrics::DOCUMENTS_FETCHED_ERROR.inc();
                     error!("Document not found on remote, id={}", req_id);
-                    Err(ImgProxyError::NotFound)
+                    Err(Errors::NotFound)
                 }
                 e => {
                     metrics::DOCUMENTS_FETCHED_ERROR.inc();
@@ -164,13 +164,13 @@ impl Document {
                         "Unable to fetch document, id={}, response_code={}",
                         req_id, e
                     );
-                    Err(ImgProxyError::FetchFailed)
+                    Err(Errors::FetchFailed)
                 }
             },
             Err(e) => {
                 metrics::DOCUMENTS_FETCHED_ERROR.inc();
                 error!("Unable to fetch document, id={}, reason={}", req_id, e);
-                Err(ImgProxyError::FetchFailed)
+                Err(Errors::FetchFailed)
             }
         }
     }

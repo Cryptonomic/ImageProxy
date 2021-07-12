@@ -3,7 +3,7 @@ use log::error;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::errors::{ImgProxyError, RpcError};
+use super::error::{Errors, RpcError};
 use crate::moderation::{ModerationCategories, ModerationService};
 
 use super::VERSION;
@@ -125,7 +125,7 @@ impl FetchResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                ImgProxyError::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
@@ -151,7 +151,7 @@ impl DescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                ImgProxyError::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
@@ -176,7 +176,7 @@ impl ReportResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                ImgProxyError::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
@@ -202,7 +202,7 @@ impl ReportDescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                ImgProxyError::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
