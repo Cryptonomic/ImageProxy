@@ -19,7 +19,7 @@ interface RequestHeader {
 
 interface FetchParams {
   params: {
-    data: ImageProxyDataType;
+    response_type: ImageProxyDataType;
     url: string;
     force: boolean;
   };
