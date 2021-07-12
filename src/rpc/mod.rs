@@ -1,3 +1,4 @@
+pub mod error;
 pub mod requests;
 pub mod responses;
 
@@ -13,6 +14,7 @@ use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
     proxy::Proxy,
+    rpc::error::Errors,
 };
 
 use requests::*;
@@ -28,7 +30,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &FetchRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, Errors> {
         info!(
             "New document fetch request, id={}, force={}, url={}",
             req_id, params.force, params.url
@@ -38,9 +40,20 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return Document::fetch(&proxy.config, req_id, &params.url)
-                .await
-                .map(|d| d.to_response());
+            return match (
+                Document::fetch(&proxy.config, req_id, &params.url).await,
+                &params.response_type,
+            ) {
+                (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                    RpcStatus::Ok,
+                    ModerationStatus::Allowed,
+                    Vec::new(),
+                    Some(doc.to_url()),
+                    req_id,
+                )),
+                (Err(e), _) => Ok(e.to_response(req_id.clone())),
+            };
         }
 
         let urls = vec![params.url.clone()];
@@ -68,62 +81,102 @@ impl Methods {
             // Send an appropriate response if moderation indicates content is blocked
             if r.blocked {
                 Ok(FetchResponse::to_response(
-                    StatusCodes::DocumentBlocked,
+                    RpcStatus::Ok,
+                    ModerationStatus::Blocked,
                     r.categories.clone(),
+                    None,
+                    req_id,
                 ))
             } else {
-                Document::fetch(&proxy.config, req_id, &params.url)
-                    .await
-                    .map(|d| d.to_response())
+                match (
+                    Document::fetch(&proxy.config, req_id, &params.url).await,
+                    &params.response_type,
+                ) {
+                    (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
+                    (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                        RpcStatus::Ok,
+                        ModerationStatus::Allowed,
+                        Vec::new(),
+                        Some(doc.to_url()),
+                        req_id,
+                    )),
+                    (Err(e), _) => Ok(e.to_response(req_id.clone())),
+                }
             }
         } else {
             metrics::CACHE_MISS.inc();
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            let document = Document::fetch(&proxy.config, req_id, &params.url).await?;
-            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            match Document::fetch(&proxy.config, req_id, &params.url).await {
+                Ok(document) => {
+                    let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
-            if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(FetchResponse::to_response(
-                    StatusCodes::UnsupportedImageType,
-                    Vec::new(),
-                ));
-            }
+                    if document_type == SupportedMimeTypes::Unsupported {
+                        return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+                    }
 
-            let max_document_size = proxy.moderation_provider.max_document_size();
-            let supported_types = proxy.moderation_provider.supported_types();
+                    let max_document_size = proxy.moderation_provider.max_document_size();
+                    let supported_types = proxy.moderation_provider.supported_types();
 
-            metrics::MODERATION_REQUESTS.inc();
+                    metrics::MODERATION_REQUESTS.inc();
 
-            // Resize the image if required or reformat to png if required
-            let mr = if document.content_length >= max_document_size
-                || !supported_types.contains(&document_type)
-            {
-                let resized_doc = document.resize_image(document_type, max_document_size)?;
-                proxy.moderation_provider.moderate(&resized_doc).await?
-            } else {
-                proxy.moderation_provider.moderate(&document).await?
-            };
+                    // Resize the image if required or reformat to png if required
+                    let formatted = if document.content_length >= max_document_size
+                        || !supported_types.contains(&document_type)
+                    {
+                        let resized_doc =
+                            document.resize_image(document_type, max_document_size)?;
+                        proxy.moderation_provider.moderate(&resized_doc).await
+                    } else {
+                        proxy.moderation_provider.moderate(&document).await
+                    };
 
-            let blocked = mr.categories.len() > 0;
-            match proxy
-                .database
-                .add_moderation_result(&params.url, mr.provider, blocked, &mr.categories)
-                .await
-            {
-                Ok(_) => info!("Database updated for id={}", req_id),
-                Err(e) => error!("Database not updated for id={}, reason={}", req_id, e),
-            }
+                    match formatted {
+                        Ok(mr) => {
+                            let blocked = mr.categories.len() > 0;
+                            match proxy
+                                .database
+                                .add_moderation_result(
+                                    &params.url,
+                                    mr.provider,
+                                    blocked,
+                                    &mr.categories,
+                                )
+                                .await
+                            {
+                                Ok(_) => info!("Database updated for id={}", req_id),
+                                Err(e) => {
+                                    error!("Database not updated for id={}, reason={}", req_id, e)
+                                }
+                            }
 
-            if blocked {
-                metrics::DOCUMENTS_BLOCKED.inc();
-                Ok(FetchResponse::to_response(
-                    StatusCodes::DocumentBlocked,
-                    mr.categories.clone(),
-                ))
-            } else {
-                Ok(document.to_response())
+                            if blocked {
+                                metrics::DOCUMENTS_BLOCKED.inc();
+                                Ok(FetchResponse::to_response(
+                                    RpcStatus::Ok,
+                                    ModerationStatus::Blocked,
+                                    mr.categories.clone(),
+                                    None,
+                                    req_id,
+                                ))
+                            } else {
+                                match params.response_type {
+                                    ResponseType::Raw => Ok(document.to_response()),
+                                    ResponseType::Json => Ok(FetchResponse::to_response(
+                                        RpcStatus::Ok,
+                                        ModerationStatus::Allowed,
+                                        Vec::new(),
+                                        Some(document.to_url()),
+                                        req_id,
+                                    )),
+                                }
+                            }
+                        }
+                        Err(e) => return Ok(e.to_response(req_id.clone())),
+                    }
+                }
+                Err(e) => Ok(e.to_response(req_id.clone())),
             }
         }
     }
@@ -132,7 +185,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &DescribeRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, Errors> {
         metrics::API_REQUESTS_DESCRIBE.inc();
         info!(
             "New describe request, id={}, urls={:?}",
@@ -167,13 +220,14 @@ impl Methods {
                     })
                     .collect();
                 Ok(DescribeResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     describe_results,
+                    req_id,
                 ))
             }
             Err(e) => {
                 error!("Error querying database for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -182,7 +236,7 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &ReportRequestParams,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, Errors> {
         metrics::API_REQUESTS_REPORT.inc();
         info!("New report request, id={}, url={}", req_id, params.url);
         match proxy
@@ -191,13 +245,13 @@ impl Methods {
             .await
         {
             Ok(_) => Ok(ReportResponse::to_response(
-                StatusCodes::Ok,
+                RpcStatus::Ok,
                 &params.url,
                 req_id,
             )),
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -205,7 +259,7 @@ impl Methods {
     pub async fn describe_report(
         proxy: Arc<Proxy>,
         req_id: &Uuid,
-    ) -> Result<Response<Body>, StatusCodes> {
+    ) -> Result<Response<Body>, Errors> {
         info!("New report describe request, id={}", req_id);
         match proxy.database.get_reports().await {
             Ok(rows) => {
@@ -219,13 +273,14 @@ impl Methods {
                     })
                     .collect();
                 Ok(ReportDescribeResponse::to_response(
-                    StatusCodes::Ok,
+                    RpcStatus::Ok,
                     results,
+                    req_id,
                 ))
             }
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
-                Err(StatusCodes::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }

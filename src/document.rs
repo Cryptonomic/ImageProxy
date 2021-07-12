@@ -1,3 +1,4 @@
+extern crate base64;
 extern crate hyper;
 
 use std::io::Cursor;
@@ -6,8 +7,11 @@ use crate::{
     config::{Configuration, Host},
     metrics,
     moderation::SupportedMimeTypes,
-    rpc::responses::StatusCodes,
+    rpc::error::Errors,
 };
+
+use base64::encode;
+
 use hyper::Client;
 use hyper::{
     body::{to_bytes, Bytes},
@@ -28,12 +32,12 @@ pub struct Document {
 }
 
 impl Document {
-    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, StatusCodes> {
+    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, Errors> {
         match url {
             u if u.starts_with("http://") | u.starts_with("https://") => {
                 u.parse::<Uri>().map_err(|e| {
                     error!("Error parsing url={}, reason={}", u, e);
-                    StatusCodes::InvalidUri
+                    Errors::InvalidUri
                 })
             }
             u if u.starts_with("ipfs://") => {
@@ -49,14 +53,14 @@ impl Document {
                 debug!("Ipfs gateway path: {}", gateway_url);
                 gateway_url.parse::<Uri>().map_err(|e| {
                     error!("Error parsing url={}, reason={}", u, e);
-                    StatusCodes::InvalidUri
+                    Errors::InvalidUri
                 })
             }
-            _ => Err(StatusCodes::UnsupportedUriScheme),
+            _ => Err(Errors::UnsupportedUriScheme),
         }
     }
 
-    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, StatusCodes> {
+    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, Errors> {
         let cursor = Cursor::new(&self.bytes);
         let img = match image_type {
             SupportedMimeTypes::ImageBmp => image::load(cursor, ImageFormat::Bmp),
@@ -68,7 +72,7 @@ impl Document {
         };
         img.or_else(|e| {
             error!("Unable to open image, reason={}", e);
-            Err(StatusCodes::ModerationFailed)
+            Err(Errors::InternalError)
         })
     }
 
@@ -76,7 +80,7 @@ impl Document {
         &self,
         image_type: SupportedMimeTypes,
         max_size: u64,
-    ) -> Result<Document, StatusCodes> {
+    ) -> Result<Document, Errors> {
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
         let scale = self.content_length as f64 / max_size as f64;
@@ -98,7 +102,7 @@ impl Document {
             }),
             Err(e) => {
                 error!("Error writing out image to buffer, reason={}", e);
-                Err(StatusCodes::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -107,7 +111,7 @@ impl Document {
         config: &Configuration,
         req_id: &Uuid,
         url: &String,
-    ) -> Result<Document, StatusCodes> {
+    ) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
         let uri = Document::to_uri(&config.ipfs, url)?;
         let https = HttpsConnector::new();
@@ -133,7 +137,7 @@ impl Document {
                         .unwrap_or("".to_string());
                     let bytes = to_bytes(response.into_body()).await.map_err(|e| {
                         error!("Error retrieving document body, reason={}", e);
-                        StatusCodes::DocumentFetchFailed
+                        Errors::FetchFailed
                     })?;
 
                     info!(
@@ -156,7 +160,7 @@ impl Document {
                 hyper::StatusCode::NOT_FOUND => {
                     metrics::DOCUMENTS_FETCHED_ERROR.inc();
                     error!("Document not found on remote, id={}", req_id);
-                    Err(StatusCodes::DocumentNotFound)
+                    Err(Errors::NotFound)
                 }
                 e => {
                     metrics::DOCUMENTS_FETCHED_ERROR.inc();
@@ -164,13 +168,13 @@ impl Document {
                         "Unable to fetch document, id={}, response_code={}",
                         req_id, e
                     );
-                    Err(StatusCodes::DocumentFetchFailed)
+                    Err(Errors::FetchFailed)
                 }
             },
             Err(e) => {
                 metrics::DOCUMENTS_FETCHED_ERROR.inc();
                 error!("Unable to fetch document, id={}, reason={}", req_id, e);
-                Err(StatusCodes::DocumentFetchFailed)
+                Err(Errors::FetchFailed)
             }
         }
     }
@@ -182,5 +186,13 @@ impl Document {
             .header(hyper::header::CONTENT_LENGTH, self.bytes.len())
             .body(Body::from(self.bytes.clone()))
             .unwrap_or_default()
+    }
+
+    pub fn to_url(&self) -> String {
+        format!(
+            "data:{};base64,{}",
+            self.content_type,
+            encode(self.bytes.to_vec())
+        )
     }
 }
