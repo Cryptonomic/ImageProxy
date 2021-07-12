@@ -12,6 +12,7 @@ export {
   ImageProxyDataType,
   FetchRequest,
   DescribeRequest,
+  ReportRequest,
   DescribeReportsRequest,
 } from "./requests";
 
@@ -19,6 +20,7 @@ export {
   RpcStatus,
   FetchResponse,
   DescribeResponse,
+  ReportResponse,
   DescribeReportsResponse,
   ImageProxyError,
 } from "./responses";

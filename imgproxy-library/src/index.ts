@@ -7,6 +7,8 @@ import {
   ImageProxyRequest,
   ImageProxyMethod,
   ImageProxyDataType,
+  ReportRequest,
+  ReportResponse,
   DescribeRequest,
   DescribeResponse,
   DescribeReportsResponse,
@@ -14,8 +16,7 @@ import {
   ModerationLabel,
   ImageProxyResponse,
 } from "./types";
-import { ReportRequest } from "./types/requests";
-import { ReportResponse } from "./types/responses";
+export * from "./types";
 
 function send(server: ImageProxyServer, request: ImageProxyRequest) {
   const options = {
