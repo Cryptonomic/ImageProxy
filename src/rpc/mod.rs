@@ -42,7 +42,7 @@ impl Methods {
             metrics::DOCUMENTS_FORCED.inc();
             return match (
                 Document::fetch(&proxy.config, req_id, &params.url).await,
-                &params.data,
+                &params.response_type,
             ) {
                 (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                 (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
@@ -90,7 +90,7 @@ impl Methods {
             } else {
                 match (
                     Document::fetch(&proxy.config, req_id, &params.url).await,
-                    &params.data,
+                    &params.response_type,
                 ) {
                     (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
                     (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
@@ -161,7 +161,7 @@ impl Methods {
                                     req_id,
                                 ))
                             } else {
-                                match params.data {
+                                match params.response_type {
                                     ResponseType::Raw => Ok(document.to_response()),
                                     ResponseType::Json => Ok(FetchResponse::to_response(
                                         RpcStatus::Ok,
