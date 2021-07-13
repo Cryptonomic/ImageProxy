@@ -2,6 +2,7 @@ pub mod error;
 pub mod requests;
 pub mod responses;
 
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use hyper::Body;
@@ -60,7 +61,7 @@ impl Methods {
         // Check the database for prior results
         let cached_results = proxy
             .database
-            .get_moderation_result(&urls)
+            .get_moderation_result(&urls, proxy.config.moderation.max_report_strikes)
             .await
             .map_err(|e| {
                 error!("Error querying database for id={}, reason={}", req_id, e);
@@ -191,7 +192,11 @@ impl Methods {
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
         );
-        match proxy.database.get_moderation_result(&params.urls).await {
+        match proxy
+            .database
+            .get_moderation_result(&params.urls, proxy.config.moderation.max_report_strikes)
+            .await
+        {
             Ok(results) => {
                 info!("Fetched results for id={}, rows={}", req_id, results.len());
                 let describe_results: Vec<DescribeResult> = params
@@ -236,12 +241,14 @@ impl Methods {
         proxy: Arc<Proxy>,
         req_id: &Uuid,
         params: &ReportRequestParams,
+        addr: &IpAddr,
+        apikey: &String,
     ) -> Result<Response<Body>, Errors> {
         metrics::API_REQUESTS_REPORT.inc();
         info!("New report request, id={}, url={}", req_id, params.url);
         match proxy
             .database
-            .add_report(req_id, &params.url, &params.categories)
+            .add_report(req_id, &params.url, &params.categories, addr, apikey)
             .await
         {
             Ok(_) => Ok(ReportResponse::to_response(

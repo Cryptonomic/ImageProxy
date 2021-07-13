@@ -46,7 +46,9 @@ CREATE TABLE public.report (
     url character varying(65536) NOT NULL,
     categories character varying(65536),
     url_hash character varying(256),
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    apikey character varying(512) NOT NULL,
+    ip_addr character varying(512) NOT NULL
 );
 
 

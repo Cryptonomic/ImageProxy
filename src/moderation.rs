@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors,
-};
+use crate::{aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors};
 
 #[derive(PartialEq)]
 pub enum SupportedMimeTypes {
@@ -31,7 +29,7 @@ impl SupportedMimeTypes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ModerationCategories {
     ExplicitNudity,
     Suggestive,
@@ -54,10 +52,7 @@ pub struct ModerationResponse {
 /// A trait that all moderation services must implement
 #[async_trait]
 pub trait ModerationProvider: Send + Sync {
-    async fn moderate(
-        self: &Self,
-        document: &Document,
-    ) -> Result<ModerationResponse, Errors>;
+    async fn moderate(self: &Self, document: &Document) -> Result<ModerationResponse, Errors>;
     fn supported_types(self: &Self) -> Vec<SupportedMimeTypes>;
     fn max_document_size(self: &Self) -> u64;
 }

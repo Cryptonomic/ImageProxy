@@ -30,6 +30,7 @@ pub struct ModerationConfig {
     pub provider: ModerationService,
     pub aws: Option<AwsConfig>,
     pub labels: Vec<String>, //TODO
+    pub max_report_strikes: usize,
 }
 
 #[derive(Deserialize, Clone)]

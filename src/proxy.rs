@@ -25,6 +25,7 @@ use procfs::process::Process;
 use prometheus::Encoder;
 use serde::de;
 use serde_json;
+use std::net::SocketAddr;
 use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
 
@@ -63,7 +64,11 @@ pub fn authenticate(api_keys: &Vec<String>, req: &Request<Body>) -> bool {
     }
 }
 
-pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
+pub async fn route(
+    proxy: Arc<Proxy>,
+    req: Request<Body>,
+    addr: SocketAddr,
+) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
     metrics::ACTIVE_CLIENTS.inc();
     let response_time_start = Utc::now();
@@ -72,7 +77,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
         (&Method::POST, "/") => {
             if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
                 let req_id = Uuid::new_v4();
-                rpc(proxy, req, req_id).await.or_else(|e| {
+                rpc(proxy, req, req_id, addr).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     Ok(e.to_response(req_id))
                 })
@@ -167,8 +172,11 @@ async fn rpc(
     proxy: Arc<Proxy>,
     req: Request<Body>,
     req_id: Uuid,
+    addr: SocketAddr,
 ) -> Result<Response<Body>, Errors> {
     metrics::API_REQUESTS.inc();
+    let apikey = String::from_utf8(req.headers().get("apikey").unwrap().as_bytes().to_vec())
+        .unwrap_or_default();
     match hyper::body::to_bytes(req.into_body()).await {
         Ok(body) => match decode::<MethodHeader>(&body) {
             Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => match header.method {
@@ -182,7 +190,7 @@ async fn rpc(
                 }
                 RpcMethods::img_proxy_report => {
                     let params = decode::<ReportRequest>(&body)?;
-                    Methods::report(proxy, &req_id, &params.params).await
+                    Methods::report(proxy, &req_id, &params.params, &addr.ip(), &apikey).await
                 }
                 RpcMethods::img_proxy_describe_report => {
                     Methods::describe_report(proxy, &req_id).await

@@ -12,6 +12,7 @@ pub mod rpc;
 use std::{convert::Infallible, sync::Arc};
 
 use hyper::{
+    server::conn::AddrStream,
     service::{make_service_fn, service_fn},
     Server,
 };
@@ -30,12 +31,13 @@ pub mod built_info {
 
 pub async fn run(config: &Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let proxy = Arc::new(Proxy::new(config).await?);
-    let service = make_service_fn(move |_| {
+    let service = make_service_fn(move |conn: &AddrStream| {
+        let addr = conn.remote_addr();
         let proxy = proxy.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
                 let proxy = proxy.to_owned();
-                route(proxy, req)
+                route(proxy, req, addr)
             }))
         }
     });
