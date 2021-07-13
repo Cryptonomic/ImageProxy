@@ -14,9 +14,7 @@ import {
   DescribeReportsResponse,
   DescribeReportsRequest,
   ModerationLabel,
-  ImageProxyResponse,
 } from "./types";
-export * from "./types";
 
 function send(server: ImageProxyServer, request: ImageProxyRequest) {
   const options = {
@@ -33,26 +31,28 @@ function send(server: ImageProxyServer, request: ImageProxyRequest) {
 export async function proxyFetch(
   server: ImageProxyServer,
   url: string,
-  response_format: ImageProxyDataType,
+  response_type: ImageProxyDataType,
   force: boolean
 ): Promise<FetchResponse | ImageProxyError> {
   const fetchRequest: FetchRequest = {
     jsonrpc: server.version,
     method: ImageProxyMethod.Fetch,
     params: {
-      data: response_format,
+      response_type,
       url,
       force,
     },
   };
 
-  const response = await send(server, fetchRequest);
-  const parsed = response
-    .json()
-    .then((json) => json)
-    .catch((_) => response.text())
-    .then((text) => text);
-  return parsed;
+  const response = (await send(server, fetchRequest)).text().then((text) => {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return text;
+    }
+  });
+
+  return response;
 }
 
 export async function safeFetch(
