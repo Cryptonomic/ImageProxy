@@ -28,7 +28,8 @@ impl IpFilter {
 }
 
 impl UriFilter for IpFilter {
-    fn filter(&self, uri: Uri) -> bool {
+    fn filter(&self, uri: &Uri) -> bool {
+        
         true
     }
 }
