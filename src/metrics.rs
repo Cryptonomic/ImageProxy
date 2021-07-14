@@ -51,6 +51,8 @@ lazy_static! {
         IntGauge::new("mem_virt", "Total virtual memory size kb").unwrap();
     pub static ref MEM_RSS: IntGauge =
         IntGauge::new("mem_rss", "Total resident memory size kb").unwrap();
+    pub static ref URI_FILTER_BLOCKED: IntCounter =
+        IntCounter::new("uri_filter_block", "Number of times the filter blocked a host").unwrap();
 }
 
 pub fn init_registry() {
@@ -95,4 +97,5 @@ pub fn init_registry() {
     REGISTRY.register(Box::new(MEM_VIRT.clone())).unwrap();
     REGISTRY.register(Box::new(MEM_RSS.clone())).unwrap();
     REGISTRY.register(Box::new(ERRORS.clone())).unwrap();
+    REGISTRY.register(Box::new(URI_FILTER_BLOCKED.clone())).unwrap();
 }
