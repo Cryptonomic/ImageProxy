@@ -9,3 +9,6 @@ proxy.conf
 log4rs.yml
 .env
 lib/*
+**/node_modules
+**/dist
+**/build
