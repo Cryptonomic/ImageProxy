@@ -6,11 +6,11 @@ pub mod config;
 pub mod db;
 pub mod dns;
 pub mod document;
+pub mod http;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;
 pub mod rpc;
-pub mod http;
 
 use std::{convert::Infallible, sync::Arc};
 

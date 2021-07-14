@@ -9,7 +9,6 @@ use log::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    document::Document,
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
     proxy::Proxy,
@@ -39,11 +38,16 @@ impl Methods {
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
 
-            return proxy
-                .http_client
-                .fetch(req_id, &params.url)
-                .await
-                .map(|d| d.to_response());
+            let document = proxy.http_client.fetch(req_id, &params.url).await?;
+            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+
+            if document_type == SupportedMimeTypes::Unsupported {
+                return Ok(FetchResponse::to_response(
+                    StatusCodes::UnsupportedImageType,
+                    Vec::new(),
+                ));
+            }
+            return Ok(document.to_response());
         }
 
         let urls = vec![params.url.clone()];

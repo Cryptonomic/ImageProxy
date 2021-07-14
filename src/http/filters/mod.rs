@@ -1,9 +1,7 @@
 use hyper::Uri;
 use serde::Deserialize;
 
-pub mod hostname_filter;
-pub mod ip_filter;
-pub mod private_network_filter;
+pub mod private_network;
 
 #[derive(Deserialize, Clone)]
 pub enum FilterAction {
@@ -12,5 +10,5 @@ pub enum FilterAction {
 }
 
 pub trait UriFilter {
-    fn filter(&self, uri: Uri) -> bool;
+    fn filter(&self, uri: &Uri) -> bool;
 }

@@ -4,7 +4,7 @@ extern crate tokio_postgres;
 use crate::dns::StandardDnsResolver;
 use crate::http::HttpClient;
 
-use crate::http::filters::private_network_filter::PrivateNetworkFilter;
+use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
@@ -48,17 +48,9 @@ impl Proxy {
         let moderation_provider = ModerationService::get_provider(config)?;
         let dns_resolver = StandardDnsResolver {};
         //TODO: Add more filters here
-        let uri_filters = vec![PrivateNetworkFilter::new(
-            false,
-            vec![],
-            Box::new(dns_resolver.clone()),
-        )];
-        let http_client = HttpClient::new(
-            config.ipfs.clone(),
-            Box::new(dns_resolver),
-            config.max_document_size,
-            uri_filters,
-        );
+        let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
+        let http_client =
+            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
         Ok(Proxy {
             config: config.clone(),
             database: database,
