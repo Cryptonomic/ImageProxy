@@ -40,7 +40,7 @@ impl Errors {
             Errors::UnsupportedImageType => (107, "Image type unsupported".to_string()),
             Errors::UnsupportedUriScheme => (108, "Uri scheme unsupported".to_string()),
             Errors::InvalidUri => (109, "Invalid Uri".to_string()),
-            Errors::InvalidOrBlockedHost => (110, "Invalid or blcoked destination host".to_string())
+            Errors::InvalidOrBlockedHost => (110, "Invalid or blocked destination host".to_string())
         };
 
         RpcError {

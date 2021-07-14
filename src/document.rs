@@ -9,7 +9,7 @@ use crate::rpc::error::Errors;
 use base64::encode;
 use hyper::{body::Bytes, Body, Response};
 
-use image;
+use image::{self, GenericImageView};
 use image::DynamicImage;
 use image::ImageFormat;
 use log::{debug, error};
@@ -23,7 +23,7 @@ pub struct Document {
 }
 
 impl Document {
-    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, StatusCodes> {
+    fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, Errors> {
         let cursor = Cursor::new(&self.bytes);
         let img = match image_type {
             SupportedMimeTypes::ImageBmp => image::load(cursor, ImageFormat::Bmp),

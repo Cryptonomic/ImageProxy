@@ -9,7 +9,6 @@ use hyper::Response;
 use log::{error, info, warn};
 use uuid::Uuid;
 
-use crate::document::Document;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
@@ -93,7 +92,7 @@ impl Methods {
                 ))
             } else {
                 match (
-                    Document::fetch(&proxy.config, req_id, &params.url).await,
+                    proxy.http_client.fetch(req_id, &params.url).await,
                     &params.response_type,
                 ) {
                     (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
@@ -112,7 +111,7 @@ impl Methods {
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            match Document::fetch(&proxy.config, req_id, &params.url).await {
+            match proxy.http_client.fetch(req_id, &params.url).await {
                 Ok(document) => {
                     let document_type = SupportedMimeTypes::from_str(&document.content_type);
 

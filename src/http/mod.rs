@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::config::Host;
 use crate::document::Document;
 use crate::metrics;
-use crate::rpc::responses::StatusCodes;
+use crate::rpc::error::Errors;
 
 use self::filters::UriFilter;
 
@@ -46,10 +46,10 @@ impl HttpClient {
         }
     }
 
-    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, StatusCodes> {
+    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, Errors> {
         let uri = url.parse::<Uri>().map_err(|e| {
             error!("Error parsing url={}, reason={}", url, e);
-            StatusCodes::InvalidUri
+            Errors::InvalidUri
         })?;
 
         match uri.scheme() {
@@ -72,17 +72,17 @@ impl HttpClient {
                         debug!("Ipfs gateway path: {}", gateway_url);
                         gateway_url.parse::<Uri>().map_err(|e| {
                             error!("Error parsing url={}, reason={}", url, e);
-                            StatusCodes::InvalidUri
+                            Errors::InvalidUri
                         })
                     }
-                    None => Err(StatusCodes::InvalidUri),
+                    None => Err(Errors::InvalidUri),
                 }
             }
-            _ => Err(StatusCodes::UnsupportedUriScheme),
+            _ => Err(Errors::UnsupportedUriScheme),
         }
     }
 
-    pub async fn fetch(&self, req_id: &Uuid, url: &String) -> Result<Document, StatusCodes> {
+    pub async fn fetch(&self, req_id: &Uuid, url: &String) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
         let uri = HttpClient::to_uri(&self.ipfs_config, url)?;
 
@@ -114,7 +114,7 @@ impl HttpClient {
                             .unwrap_or("".to_string());
                         let bytes = to_bytes(response.into_body()).await.map_err(|e| {
                             error!("Error retrieving document body, reason={}", e);
-                            StatusCodes::DocumentFetchFailed
+                            Errors::FetchFailed
                         })?;
 
                         info!(
@@ -137,7 +137,7 @@ impl HttpClient {
                     hyper::StatusCode::NOT_FOUND => {
                         metrics::DOCUMENTS_FETCHED_ERROR.inc();
                         error!("Document not found on remote, id={}", req_id);
-                        Err(StatusCodes::DocumentNotFound)
+                        Err(Errors::NotFound)
                     }
                     e => {
                         metrics::DOCUMENTS_FETCHED_ERROR.inc();
@@ -145,22 +145,22 @@ impl HttpClient {
                             "Unable to fetch document, id={}, response_code={}",
                             req_id, e
                         );
-                        Err(StatusCodes::DocumentFetchFailed)
+                        Err(Errors::FetchFailed)
                     }
                 },
                 Err(e) => {
                     metrics::DOCUMENTS_FETCHED_ERROR.inc();
                     error!("Unable to fetch document, id={}, reason={}", req_id, e);
-                    Err(StatusCodes::DocumentFetchFailed)
+                    Err(Errors::FetchFailed)
                 }
             },
             Some(false) => {
                 warn!("Invalid destination host for id:{}", req_id);
-                Err(StatusCodes::InvalidOrBlockedHost)
+                Err(Errors::InvalidOrBlockedHost)
             }
             None => {
                 warn!("Invalid destination host for id:{}", req_id);
-                Err(StatusCodes::InvalidOrBlockedHost)
+                Err(Errors::InvalidOrBlockedHost)
             }
         }
     }
