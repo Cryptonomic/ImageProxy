@@ -51,7 +51,6 @@ export async function proxyFetch(
       force,
     },
   };
-
   const response = (await send(server, fetchRequest)).text().then((text) => {
     try {
       return JSON.parse(text);
@@ -59,7 +58,6 @@ export async function proxyFetch(
       return text;
     }
   });
-
   return response;
 }
 
