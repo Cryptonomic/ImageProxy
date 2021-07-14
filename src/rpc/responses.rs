@@ -3,25 +3,21 @@ use log::error;
 use serde::Serialize;
 use uuid::Uuid;
 
+use super::error::{Errors, RpcError};
 use crate::moderation::{ModerationCategories, ModerationService};
 
 use super::VERSION;
 
 #[derive(Serialize)]
-pub enum StatusCodes {
+pub enum RpcStatus {
     Ok,
-    InvalidRpcVersionError,
-    InvalidRpcMethodError,
-    InvalidUri,
-    UnsupportedUriScheme,
-    JsonDecodeError,
-    DocumentBlocked,
-    DocumentFetchFailed,
-    DocumentNotFound,
-    ModerationFailed,
-    UnsupportedImageType,
-    InternalError,
-    InvalidOrBlockedHost
+    Err,
+}
+
+#[derive(Serialize)]
+pub enum ModerationStatus {
+    Allowed,
+    Blocked,
 }
 
 #[derive(Default, Serialize)]
@@ -32,13 +28,22 @@ pub struct Info {
 
 #[derive(Serialize)]
 pub struct ModerationResult {
+    pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
+    pub data: String,
+}
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    pub jsonrpc: String,
+    pub rpc_status: RpcStatus,
+    pub error: RpcError,
 }
 
 #[derive(Serialize)]
 pub struct FetchResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub rpc_status: RpcStatus,
     pub result: ModerationResult,
 }
 
@@ -60,7 +65,7 @@ pub struct DescribeResult {
 #[derive(Serialize)]
 pub struct DescribeResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub rpc_status: RpcStatus,
     pub result: Vec<DescribeResult>,
 }
 
@@ -73,7 +78,7 @@ pub struct ReportResult {
 #[derive(Serialize)]
 pub struct ReportResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub rpc_status: RpcStatus,
     pub result: ReportResult,
 }
 
@@ -87,24 +92,31 @@ pub struct ReportDescribeResult {
 #[derive(Serialize)]
 pub struct ReportDescribeResponse {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub rpc_status: RpcStatus,
     pub result: Vec<ReportDescribeResult>,
 }
 
-// Rpc Error
 #[derive(Serialize)]
-pub struct RpcError {
+pub struct ServerError {
     pub jsonrpc: String,
-    pub code: StatusCodes,
+    pub rpc_status: RpcStatus,
 }
 
 impl FetchResponse {
-    pub fn to_response(code: StatusCodes, categories: Vec<ModerationCategories>) -> Response<Body> {
+    pub fn to_response(
+        rpc_status: RpcStatus,
+        moderation_status: ModerationStatus,
+        categories: Vec<ModerationCategories>,
+        data: Option<String>,
+        req_id: &Uuid,
+    ) -> Response<Body> {
         let result = FetchResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            rpc_status,
             result: ModerationResult {
+                moderation_status,
                 categories: categories.clone(),
+                data: data.unwrap_or(String::new()),
             },
         };
 
@@ -116,17 +128,21 @@ impl FetchResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
 }
 
 impl DescribeResponse {
-    pub fn to_response(code: StatusCodes, describe_results: Vec<DescribeResult>) -> Response<Body> {
+    pub fn to_response(
+        rpc_status: RpcStatus,
+        describe_results: Vec<DescribeResult>,
+        req_id: &Uuid,
+    ) -> Response<Body> {
         let result = DescribeResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            rpc_status,
             result: describe_results,
         };
 
@@ -138,20 +154,20 @@ impl DescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
 }
 
 impl ReportResponse {
-    pub fn to_response(code: StatusCodes, url: &str, id: &Uuid) -> Response<Body> {
+    pub fn to_response(rpc_status: RpcStatus, url: &str, req_id: &Uuid) -> Response<Body> {
         let result = ReportResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            rpc_status,
             result: ReportResult {
                 url: String::from(url),
-                id: id.clone(),
+                id: req_id.clone(),
             },
         };
 
@@ -163,17 +179,21 @@ impl ReportResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
     }
 }
 
 impl ReportDescribeResponse {
-    pub fn to_response(code: StatusCodes, results: Vec<ReportDescribeResult>) -> Response<Body> {
+    pub fn to_response(
+        rpc_status: RpcStatus,
+        results: Vec<ReportDescribeResult>,
+        req_id: &Uuid,
+    ) -> Response<Body> {
         let result = ReportDescribeResponse {
             jsonrpc: String::from(VERSION),
-            code,
+            rpc_status,
             result: results,
         };
 
@@ -185,25 +205,8 @@ impl ReportDescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                RpcError::to_response(StatusCodes::InternalError)
+                Errors::InternalError.to_response(req_id.clone())
             }
         }
-    }
-}
-
-impl RpcError {
-    pub fn to_response(code: StatusCodes) -> Response<Body> {
-        let result = RpcError {
-            jsonrpc: String::from(VERSION),
-            code,
-        };
-        let body = serde_json::to_string_pretty(&result)
-            .unwrap_or_default()
-            .clone();
-        Response::builder()
-            .status(hyper::StatusCode::OK)
-            .header(hyper::header::CONTENT_TYPE, "application/json")
-            .body(Body::from(body))
-            .unwrap_or_default()
     }
 }

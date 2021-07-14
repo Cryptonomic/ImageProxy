@@ -1,14 +1,17 @@
+extern crate base64;
 extern crate hyper;
 
 use std::io::Cursor;
 
-use crate::{moderation::SupportedMimeTypes, rpc::responses::StatusCodes};
+use crate::moderation::SupportedMimeTypes;
+use crate::rpc::error::Errors;
 
+use base64::encode;
 use hyper::{body::Bytes, Body, Response};
 
+use image;
 use image::DynamicImage;
 use image::ImageFormat;
-use image::{self, GenericImageView};
 use log::{debug, error};
 use uuid::Uuid;
 
@@ -32,7 +35,7 @@ impl Document {
         };
         img.or_else(|e| {
             error!("Unable to open image, reason={}", e);
-            Err(StatusCodes::ModerationFailed)
+            Err(Errors::InternalError)
         })
     }
 
@@ -40,7 +43,7 @@ impl Document {
         &self,
         image_type: SupportedMimeTypes,
         max_size: u64,
-    ) -> Result<Document, StatusCodes> {
+    ) -> Result<Document, Errors> {
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
         let scale = self.content_length as f64 / max_size as f64;
@@ -62,7 +65,7 @@ impl Document {
             }),
             Err(e) => {
                 error!("Error writing out image to buffer, reason={}", e);
-                Err(StatusCodes::InternalError)
+                Err(Errors::InternalError)
             }
         }
     }
@@ -74,5 +77,13 @@ impl Document {
             .header(hyper::header::CONTENT_LENGTH, self.bytes.len())
             .body(Body::from(self.bytes.clone()))
             .unwrap_or_default()
+    }
+
+    pub fn to_url(&self) -> String {
+        format!(
+            "data:{};base64,{}",
+            self.content_type,
+            encode(self.bytes.to_vec())
+        )
     }
 }

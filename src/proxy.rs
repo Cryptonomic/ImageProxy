@@ -8,12 +8,12 @@ use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
-use crate::{built_info, rpc::responses::StatusCodes};
+use crate::{built_info, rpc::error::Errors};
 use crate::{
     config::Configuration,
     rpc::{
         requests::{DescribeRequest, FetchRequest, MethodHeader, ReportRequest, RpcMethods},
-        responses::{Info, RpcError},
+        responses::Info,
     },
 };
 use crate::{
@@ -82,9 +82,10 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
-                rpc(proxy, req).await.or_else(|e| {
+                let req_id = Uuid::new_v4();
+                rpc(proxy, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
-                    Ok(RpcError::to_response(e))
+                    Ok(e.to_response(req_id))
                 })
             } else {
                 Ok(Response::builder()
@@ -115,7 +116,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     response.or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(RpcError::to_response(StatusCodes::InternalError))
+        Ok(Errors::InternalError.to_response(Uuid::new_v4()))
     })
 }
 
@@ -163,46 +164,47 @@ async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, G
     )))
 }
 
-fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, StatusCodes> {
+fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
     match serde_json::from_slice::<T>(&body) {
         Ok(o) => Ok(o),
         Err(e) => {
             error!("Json decode error, reason:{}", e);
-            Err(StatusCodes::JsonDecodeError)
+            Err(Errors::JsonDecodeError)
         }
     }
 }
 
-async fn rpc(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Body>, StatusCodes> {
+async fn rpc(
+    proxy: Arc<Proxy>,
+    req: Request<Body>,
+    req_id: Uuid,
+) -> Result<Response<Body>, Errors> {
     metrics::API_REQUESTS.inc();
     match hyper::body::to_bytes(req.into_body()).await {
         Ok(body) => match decode::<MethodHeader>(&body) {
-            Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => {
-                let req_id = Uuid::new_v4();
-                match header.method {
-                    RpcMethods::img_proxy_fetch => {
-                        let params = decode::<FetchRequest>(&body)?;
-                        Methods::fetch(proxy, &req_id, &params.params).await
-                    }
-                    RpcMethods::img_proxy_describe => {
-                        let params = decode::<DescribeRequest>(&body)?;
-                        Methods::describe(proxy, &req_id, &params.params).await
-                    }
-                    RpcMethods::img_proxy_report => {
-                        let params = decode::<ReportRequest>(&body)?;
-                        Methods::report(proxy, &req_id, &params.params).await
-                    }
-                    RpcMethods::img_proxy_describe_report => {
-                        Methods::describe_report(proxy, &req_id).await
-                    }
+            Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => match header.method {
+                RpcMethods::img_proxy_fetch => {
+                    let params = decode::<FetchRequest>(&body)?;
+                    Methods::fetch(proxy, &req_id, &params.params).await
                 }
-            }
-            Ok(_) => Err(StatusCodes::InvalidRpcVersionError),
+                RpcMethods::img_proxy_describe => {
+                    let params = decode::<DescribeRequest>(&body)?;
+                    Methods::describe(proxy, &req_id, &params.params).await
+                }
+                RpcMethods::img_proxy_report => {
+                    let params = decode::<ReportRequest>(&body)?;
+                    Methods::report(proxy, &req_id, &params.params).await
+                }
+                RpcMethods::img_proxy_describe_report => {
+                    Methods::describe_report(proxy, &req_id).await
+                }
+            },
+            Ok(_) => Err(Errors::InvalidRpcVersionError),
             Err(e) => Err(e),
         },
         Err(e) => {
             error!("Unable to obtain request body, reason:{}", e);
-            Err(StatusCodes::InternalError)
+            Err(Errors::InternalError)
         }
     }
 }
