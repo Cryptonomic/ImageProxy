@@ -28,6 +28,14 @@ function send(server: ImageProxyServer, request: ImageProxyRequest) {
   return fetch(server.url, options);
 }
 
+/**
+ * Returns a fetch reponse from specified image proxy
+ * @param {Server} server - Server configuration object
+ * @param {string} url - Url of the image to fetch
+ * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
+ * @param {boolean} force - Whether or not image should be returned if it is potentially blocked
+ * @returns {Promise<FetchResponse | ImageProxyError>} Image proxy reponse or error
+ */
 export async function proxyFetch(
   server: ImageProxyServer,
   url: string,
@@ -55,6 +63,13 @@ export async function proxyFetch(
   return response;
 }
 
+/**
+ * Returns a moderated fetch reponse from specified image proxy, blocking unsafe images
+ * @param {Server} server - Server configuration object
+ * @param {string} url - Url of the image to fetch
+ * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
+ * @returns {Promise<FetchResponse | ImageProxyError>} Image proxy reponse or error
+ */
 export async function safeFetch(
   server: ImageProxyServer,
   url: string,
@@ -63,6 +78,13 @@ export async function safeFetch(
   return proxyFetch(server, url, response_format, false);
 }
 
+/**
+ * Returns an unmoderated fetch reponse from specified image proxy, allowing all images
+ * @param {Server} server - Server configuration object
+ * @param {string} url - Url of the image to fetch
+ * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
+ * @returns {Promise<FetchResponse | ImageProxyError>} Image proxy reponse or error
+ */
 export async function unsafeFetch(
   server: ImageProxyServer,
   url: string,
@@ -71,6 +93,12 @@ export async function unsafeFetch(
   return proxyFetch(server, url, response_format, true);
 }
 
+/**
+ * Describes the moderation status of provided urls
+ * @param {Server} server - Server configuration object
+ * @param {string} urls - List of urls of the images to describe
+ * @returns {Promise<DescribeResponse | ImageProxyError>} Describe reponse or error
+ */
 export async function describe(
   server: ImageProxyServer,
   urls: string[]
@@ -83,6 +111,13 @@ export async function describe(
   return send(server, describeRequest).then((response) => response.json());
 }
 
+/**
+ * Report a url that was deemed safe but should be blocked
+ * @param {Server} server - Server configuration object
+ * @param {string} urls - List of urls of the images to report
+ * @param {ModerationLabel[]} categories - List of moderation labels to report the image as
+ * @returns {Promise<ReportResponse | ImageProxyError>} Report reponse or error
+ */
 export async function report(
   server: ImageProxyServer,
   url: string,
@@ -96,6 +131,11 @@ export async function report(
   return send(server, reportRequest).then((response) => response.json());
 }
 
+/**
+ * Describe all reports submitted to image proxy
+ * @param {Server} server - Server configuration object
+ * @returns {Promise<DescribeReportResponse | ImageProxyError>} Describe report response or error
+ */
 export async function describeReports(
   server: ImageProxyServer
 ): Promise<DescribeReportsResponse | ImageProxyError> {

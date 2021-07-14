@@ -10,7 +10,6 @@ use log::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    document::Document,
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
     proxy::Proxy,
@@ -40,19 +39,23 @@ impl Methods {
         // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENTS_FORCED.inc();
-            return match (
-                Document::fetch(&proxy.config, req_id, &params.url).await,
-                &params.response_type,
-            ) {
-                (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
-                (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+
+            let document = proxy.http_client.fetch(req_id, &params.url).await?;
+            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+
+            if document_type == SupportedMimeTypes::Unsupported {
+                return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+            }
+
+            return match &params.response_type {
+                ResponseType::Raw => Ok(document.to_response()),
+                ResponseType::Json => Ok(FetchResponse::to_response(
                     RpcStatus::Ok,
                     ModerationStatus::Allowed,
                     Vec::new(),
-                    Some(doc.to_url()),
+                    Some(document.to_url()),
                     req_id,
                 )),
-                (Err(e), _) => Ok(e.to_response(req_id.clone())),
             };
         }
 
@@ -89,7 +92,7 @@ impl Methods {
                 ))
             } else {
                 match (
-                    Document::fetch(&proxy.config, req_id, &params.url).await,
+                    proxy.http_client.fetch(req_id, &params.url).await,
                     &params.response_type,
                 ) {
                     (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
@@ -108,7 +111,7 @@ impl Methods {
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            match Document::fetch(&proxy.config, req_id, &params.url).await {
+            match proxy.http_client.fetch(req_id, &params.url).await {
                 Ok(document) => {
                     let document_type = SupportedMimeTypes::from_str(&document.content_type);
 

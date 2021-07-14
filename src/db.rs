@@ -56,7 +56,7 @@ impl Database {
 
         Ok(Database {
             pool: Pool::builder()
-                .connection_timeout(Duration::new(10, 0))
+                .connection_timeout(Duration::new(30, 0))
                 .min_idle(Some(2))
                 .max_size(16)
                 .build(pg_mgr)
