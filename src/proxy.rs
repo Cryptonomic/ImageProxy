@@ -1,6 +1,10 @@
 extern crate bb8_postgres;
 extern crate tokio_postgres;
 
+use crate::dns::StandardDnsResolver;
+use crate::http::HttpClient;
+
+use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
@@ -35,17 +39,24 @@ pub struct Proxy {
     pub database: Database,
     pub start_time: DateTime<Utc>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
+    pub http_client: HttpClient,
 }
 
 impl Proxy {
     pub async fn new(config: &Configuration) -> Result<Proxy, GenericError> {
         let database = Database::new(config).await?;
         let moderation_provider = ModerationService::get_provider(config)?;
+        let dns_resolver = StandardDnsResolver {};
+        //TODO: Add more filters here
+        let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
+        let http_client =
+            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
         Ok(Proxy {
             config: config.clone(),
             database: database,
             start_time: Utc::now(),
             moderation_provider: moderation_provider,
+            http_client: http_client,
         })
     }
 }
