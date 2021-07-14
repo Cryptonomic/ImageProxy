@@ -1,0 +1,17 @@
+version: "3"
+
+services:
+  database:
+    image: "postgres:13.3"
+    environment:
+      POSTGRES_USER: "imgproxy"
+      POSTGRES_PASSWORD: "super_long_password_change_me!"
+      POSTGRES_DB: "imgproxy"    
+    ports:
+      - "5432:5432"
+    volumes:
+      - database-data:/var/lib/postgresql/data/
+      - "./sql/:/docker-entrypoint-initdb.d/"
+
+volumes:
+  database-data:

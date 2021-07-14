@@ -1,4 +1,7 @@
 /target
+/node_modules
+/dist
 .vscode
 log/**
 .env
+*.txt

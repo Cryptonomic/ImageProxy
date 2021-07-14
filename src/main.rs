@@ -1,9 +1,12 @@
+#![feature(ip)]
 extern crate tokio;
 
 pub mod aws;
 pub mod config;
 pub mod db;
+pub mod dns;
 pub mod document;
+pub mod http;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;

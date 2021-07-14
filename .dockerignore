@@ -1,6 +1,5 @@
 target/**
 log
-sql
 .vscode/**
 docker-compose.yml
 Dockerfile
@@ -8,3 +7,4 @@ README.md
 LICENSE
 proxy.conf
 log4rs.yml
+.env
