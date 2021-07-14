@@ -57,7 +57,7 @@ mod tests {
 
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let private_uri = "http://localhost:8080/image.png".parse().unwrap();
-        assert_eq!(filter.filter(private_uri), false);
+        assert_eq!(filter.filter(&private_uri), false);
     }
 
     #[test]
@@ -65,7 +65,7 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let private_uri = "http://localhost:8080/image.png".parse().unwrap();
-        assert_eq!(filter.filter(private_uri), false);
+        assert_eq!(filter.filter(&private_uri), false);
     }
 
     #[test]
@@ -76,7 +76,7 @@ mod tests {
         };
         let filter = PrivateNetworkFilter::new(Box::new(resolver2));
         let global_uri = "https://www.google.com/image.png".parse().unwrap();
-        assert_eq!(filter.filter(global_uri), true);
+        assert_eq!(filter.filter(&global_uri), true);
     }
 
     #[test]
@@ -88,7 +88,7 @@ mod tests {
         };
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://www.google.com/image.png".parse().unwrap();
-        assert_eq!(filter.filter(global_uri), false);
+        assert_eq!(filter.filter(&global_uri), false);
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://169.254.10.254/image.png".parse().unwrap();
-        assert_eq!(filter.filter(global_uri), false);
+        assert_eq!(filter.filter(&global_uri), false);
     }
 
     #[test]
@@ -104,6 +104,6 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://255.255.255.255/image.png".parse().unwrap();
-        assert_eq!(filter.filter(global_uri), false);
+        assert_eq!(filter.filter(&global_uri), false);
     }
 }
