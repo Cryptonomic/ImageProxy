@@ -59,9 +59,30 @@ impl Methods {
 
         let urls = vec![params.url.clone()];
         // Check the database for prior results
+        let user_moderation = proxy
+            .database
+            .get_user_moderation_result(&urls, proxy.config.moderation.max_report_strikes)
+            .await;
+        if let Ok(res) = user_moderation {
+            if res.len() == 0 {
+                return Ok(Errors::InternalError.to_response(req_id.clone()));
+            }
+            if res[0].blocked {
+                return Ok(FetchResponse::to_response(
+                    RpcStatus::Ok,
+                    ModerationStatus::Blocked,
+                    res[0].categories.clone(),
+                    None,
+                    req_id,
+                ));
+            }
+        } else {
+            return Ok(Errors::InternalError.to_response(req_id.clone()));
+        };
+
         let cached_results = proxy
             .database
-            .get_moderation_result(&urls, proxy.config.moderation.max_report_strikes)
+            .get_moderation_result(&urls)
             .await
             .map_err(|e| {
                 error!("Error querying database for id={}, reason={}", req_id, e);
@@ -192,36 +213,75 @@ impl Methods {
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
         );
-        match proxy
-            .database
-            .get_moderation_result(&params.urls, proxy.config.moderation.max_report_strikes)
-            .await
-        {
-            Ok(results) => {
-                info!("Fetched results for id={}, rows={}", req_id, results.len());
+        match (
+            proxy.database.get_moderation_result(&params.urls).await,
+            proxy
+                .database
+                .get_user_moderation_result(
+                    &params.urls,
+                    proxy.config.moderation.max_report_strikes,
+                )
+                .await,
+        ) {
+            (Ok(provider_results), Ok(user_results)) => {
+                info!(
+                    "Fetched provider moderated results for id={}, rows={}",
+                    req_id,
+                    provider_results.len()
+                );
+                info!(
+                    "Fetched user moderated results for id={}, rows={}",
+                    req_id,
+                    user_results.len()
+                );
                 let describe_results: Vec<DescribeResult> = params
                     .urls
                     .iter()
-                    .map(|url| match results.iter().find(|r| r.url.eq(url)) {
-                        Some(res) => {
-                            let status = if res.blocked {
-                                DocumentStatus::Blocked
-                            } else {
-                                DocumentStatus::Allowed
-                            };
-                            DescribeResult {
+                    .map(|url| {
+                        match (
+                            provider_results.iter().find(|r| r.url.eq(url)),
+                            user_results.iter().find(|r| r.url.eq(url)),
+                        ) {
+                            (Some(prov), Some(usr)) => {
+                                let to_use = match usr.blocked {
+                                    true => usr,
+                                    false => prov,
+                                };
+                                DescribeResult {
+                                    url: url.clone(),
+                                    status: match to_use.blocked {
+                                        true => DocumentStatus::Blocked,
+                                        false => DocumentStatus::Allowed,
+                                    },
+                                    categories: to_use.categories.clone(),
+                                    provider: to_use.provider.clone(),
+                                }
+                            }
+                            (Some(res), None) => DescribeResult {
                                 url: url.clone(),
-                                status: status,
+                                status: match res.blocked {
+                                    true => DocumentStatus::Blocked,
+                                    false => DocumentStatus::Allowed,
+                                },
                                 categories: res.categories.clone(),
                                 provider: res.provider.clone(),
-                            }
+                            },
+                            (None, Some(res)) => DescribeResult {
+                                url: url.clone(),
+                                status: match res.blocked {
+                                    true => DocumentStatus::Blocked,
+                                    false => DocumentStatus::Allowed,
+                                },
+                                categories: res.categories.clone(),
+                                provider: res.provider.clone(),
+                            },
+                            (None, None) => DescribeResult {
+                                url: url.clone(),
+                                status: DocumentStatus::NeverSeen,
+                                categories: Vec::new(),
+                                provider: ModerationService::None,
+                            },
                         }
-                        None => DescribeResult {
-                            url: url.clone(),
-                            status: DocumentStatus::NeverSeen,
-                            categories: Vec::new(),
-                            provider: ModerationService::None,
-                        },
                     })
                     .collect();
                 Ok(DescribeResponse::to_response(
@@ -230,8 +290,18 @@ impl Methods {
                     req_id,
                 ))
             }
-            Err(e) => {
-                error!("Error querying database for id={}, reason={}", req_id, e);
+            (Err(e), _) => {
+                error!(
+                    "Error querying cache database for id={}, reason={}",
+                    req_id, e
+                );
+                Err(Errors::InternalError)
+            }
+            (_, Err(e)) => {
+                error!(
+                    "Error querying report database for id={}, reason={}",
+                    req_id, e
+                );
                 Err(Errors::InternalError)
             }
         }

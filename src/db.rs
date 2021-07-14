@@ -1,5 +1,5 @@
 extern crate crypto;
-use std::{net::IpAddr, net::Ipv4Addr, time::Duration};
+use std::{net::IpAddr, net::Ipv4Addr, time::Duration, usize};
 
 use crate::{
     moderation::{ModerationCategories, ModerationService},
@@ -9,7 +9,8 @@ use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
-use itertools::Itertools;
+use std::collections::HashSet;
+
 use log::debug;
 use tokio_postgres::NoTls;
 
@@ -38,6 +39,13 @@ pub struct ReportRow {
     pub updated_at: DateTime<Utc>,
     pub apikey: String,
     pub ip_addr: IpAddr,
+}
+
+pub struct ReportData {
+    pub url: String,
+    pub url_hash: String,
+    pub categories: Vec<ModerationCategories>,
+    pub num_reports: usize,
 }
 
 impl Database {
@@ -173,11 +181,29 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_moderation_result(
+    pub async fn get_user_moderation_result(
         &self,
-        url: &Vec<String>,
+        urls: &Vec<String>,
         max_report_strikes: usize,
     ) -> Result<Vec<DocumentCacheRow>> {
+        let report_results: Vec<Result<ReportData>> =
+            join_all(urls.iter().map(|url| self.get_user_moderation_for_url(url))).await;
+        Ok(report_results
+            .iter()
+            .filter(|r| if let Ok(_) = r { true } else { false })
+            .map(|r| {
+                let data = r.as_ref().unwrap();
+                DocumentCacheRow {
+                    url: data.url.clone(),
+                    blocked: data.num_reports > max_report_strikes,
+                    categories: data.categories.clone(),
+                    provider: ModerationService::Reports,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn get_moderation_result(&self, url: &Vec<String>) -> Result<Vec<DocumentCacheRow>> {
         let url_hashes: Vec<String> = url.iter().map(|u| Database::sha512(u.as_bytes())).collect();
         let conn = self.pool.get().await?;
         let results = conn
@@ -189,54 +215,24 @@ impl Database {
             .await?;
 
         debug!("Retrieved {} rows.", results.len());
-        let report_tally: Vec<usize> = join_all(
-            url_hashes
-                .iter()
-                .map(|hash| self.get_num_reports_for_hash(hash)),
-        )
-        .await
-        .iter()
-        .map(|i| match i {
-            Ok(n) => n.to_owned(),
-            Err(_) => 0,
-        })
-        .collect();
-
-        let report_categories: Vec<Vec<ModerationCategories>> = join_all(
-            url_hashes
-                .iter()
-                .map(|hash| self.get_reported_categories_for_hash(hash)),
-        )
-        .await
-        .iter()
-        .map(|i| match i {
-            Ok(vec) => vec.clone(),
-            Err(_) => Vec::<ModerationCategories>::new(),
-        })
-        .collect();
-
         if results.len() == 0 {
             return Ok(Vec::new());
         }
 
         Ok(results
             .iter()
-            .enumerate()
-            .map(move |(i, r)| {
-                let blocked: bool = r.get("blocked") || report_tally[i] > max_report_strikes;
+            .map(|r| {
+                let blocked: bool = r.get("blocked");
                 let categories: &str = r.get("categories");
                 let provider: &str = r.get("provider");
                 let url: &str = r.get("url");
-                let categories = match report_tally[i] > max_report_strikes {
-                    true => report_categories[i].clone(),
-                    false => serde_json::from_str::<Vec<ModerationCategories>>(&categories)
-                        .unwrap_or(Vec::new()),
-                };
+                let categories = serde_json::from_str::<HashSet<ModerationCategories>>(&categories)
+                    .unwrap_or(HashSet::new());
                 let provider = serde_json::from_str::<ModerationService>(&provider)
                     .unwrap_or(ModerationService::Unknown);
                 DocumentCacheRow {
                     blocked,
-                    categories: categories.clone(),
+                    categories: categories.clone().into_iter().collect(),
                     provider: provider,
                     url: String::from(url),
                 }
@@ -244,7 +240,23 @@ impl Database {
             .collect())
     }
 
-    pub async fn get_num_reports_for_hash(&self, url_hash: &String) -> Result<usize> {
+    async fn get_user_moderation_for_url(&self, url: &String) -> Result<ReportData> {
+        let url_hash = Database::sha512(url.as_bytes());
+        let num_reports = self.get_num_reports_for_hash(&url_hash).await?;
+        let categories = self
+            .get_reported_categories_for_hash(&url_hash)
+            .await?
+            .into_iter()
+            .collect();
+        Ok(ReportData {
+            url: url.clone(),
+            url_hash,
+            num_reports,
+            categories,
+        })
+    }
+
+    async fn get_num_reports_for_hash(&self, url_hash: &String) -> Result<usize> {
         Ok(self
             .pool
             .get()
@@ -257,10 +269,10 @@ impl Database {
             .len())
     }
 
-    pub async fn get_reported_categories_for_hash(
+    async fn get_reported_categories_for_hash(
         &self,
         url_hash: &String,
-    ) -> Result<Vec<ModerationCategories>> {
+    ) -> Result<HashSet<ModerationCategories>> {
         let res = self
             .pool
             .get()
@@ -274,14 +286,14 @@ impl Database {
             .iter()
             .map(|r| {
                 let categories: &str = r.get("categories");
-                serde_json::from_str::<Vec<ModerationCategories>>(&categories).unwrap_or(Vec::new())
+                serde_json::from_str::<HashSet<ModerationCategories>>(&categories)
+                    .unwrap_or(HashSet::new())
             })
-            .fold(Vec::new(), |mut sum, val| {
+            .fold(HashSet::new(), |mut sum, val| {
                 sum.extend(val);
                 sum
             })
             .into_iter()
-            .unique()
             .collect();
 
         Ok(res)

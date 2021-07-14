@@ -81,6 +81,7 @@ impl ModerationProvider for NullProvider {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum ModerationService {
     Aws,
+    Reports,
     Unknown,
     None,
 }
