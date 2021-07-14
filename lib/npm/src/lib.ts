@@ -29,7 +29,7 @@ function send(server: ImageProxyServer, request: ImageProxyRequest) {
 }
 
 /**
- * Returns a fetch reponse from specified image proxy
+ * Returns a fetch reponse from specified image proxy with the image data in it
  * @param {Server} server - Server configuration object
  * @param {string} url - Url of the image to fetch
  * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
@@ -62,7 +62,7 @@ export async function proxyFetch(
 }
 
 /**
- * Returns a moderated fetch reponse from specified image proxy, blocking unsafe images
+ * Returns a moderated fetch reponse from specified image proxy with the image data in it, blocking unsafe images
  * @param {Server} server - Server configuration object
  * @param {string} url - Url of the image to fetch
  * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
@@ -77,7 +77,7 @@ export async function safeFetch(
 }
 
 /**
- * Returns an unmoderated fetch reponse from specified image proxy, allowing all images
+ * Returns an unmoderated fetch reponse from specified image proxy with the image data in it, allowing all images
  * @param {Server} server - Server configuration object
  * @param {string} url - Url of the image to fetch
  * @param {ImageProxyDataType} response_type - Data type of response. Either raw bytes or json response
