@@ -156,10 +156,12 @@ impl HttpClient {
             },
             Some(false) => {
                 warn!("Invalid destination host for id:{}", req_id);
+                metrics::URI_FILTER_BLOCKED.inc();
                 Err(Errors::InvalidOrBlockedHost)
             }
             None => {
                 warn!("Invalid destination host for id:{}", req_id);
+                metrics::URI_FILTER_BLOCKED.inc();
                 Err(Errors::InvalidOrBlockedHost)
             }
         }
