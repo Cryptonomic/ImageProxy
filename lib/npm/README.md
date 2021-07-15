@@ -10,7 +10,7 @@
 
 ### Fetch
 
-To fetch an image, use `proxyFetch`.
+To fetch an image, use `proxyFetch`. This function takes in a server object, the url to fetch, the response type (either `ImageProxyDataType.Json` or `ImageProxyDataType.Raw`), and a `force` flag. If `force` is set to true, the image will be fetched regardless of if it contains explicit content. If it is set to `false`, then explicit images will be blocked and a JSON response will be returned which contains a list of moderation labels that the image was found to match with.
 
 ```typescript
 import {
@@ -33,8 +33,6 @@ proxyFetch(
 ).then((response) => console.log(response));
 ```
 
-`proxyFetch` takes in a server object, the url to fetch, the response type (either `ImageProxyDataType.Json` or `ImageProxyDataType.Raw`), and a `force` flag. If `force` is set to true, the image will be fetched regardless of if it contains explicit content. If it is set to `false`, then explicit images will be blocked and a JSON response will be returned which contains a list of moderation labels that the image was found to match with.
-
 Some convenience functions are also available. `safeFetch` is equivilant to `proxyFetch` with the force parameter set to `false` and `unsafeFetch` is equivilant to `proxyFetch` with the `force` parameter set to `true`.
 
 ```typescript
@@ -51,7 +49,7 @@ unsafeFetch(server, url, ImageProxyDataType.Json).then(
 
 ### Describe
 
-If the image proxy has seen an image previously, it can return moderation results from its cache before fetching.
+If the image proxy has seen an image previously, it can return moderation results from its cache before fetching. `describe` takes in an array of url strings and returns a JSON response containing a description of each image. The status of each image can be either `Blocked`, `Allowed`, or `NotSeen` (if the image hasn't been cached yet).
 
 ```typescript
 import { describe } from "nft-image-proxy";
@@ -60,8 +58,6 @@ describe(server, [url1, url2, url3]).then(
   (response: DescribeResponse | ImageProxyError) => console.log(response)
 );
 ```
-
-`describe` takes in an array of url strings and returns a JSON response containing a description of each image. The status of each image can be either `Blocked`, `Allowed`, or `NotSeen` (if the image hasn't been cached yet).
 
 ### Report
 
