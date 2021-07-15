@@ -2,6 +2,7 @@
 extern crate tokio;
 
 pub mod aws;
+pub mod cache;
 pub mod config;
 pub mod db;
 pub mod dns;
@@ -11,6 +12,7 @@ pub mod metrics;
 pub mod moderation;
 pub mod proxy;
 pub mod rpc;
+pub mod utils;
 
 use std::{convert::Infallible, sync::Arc};
 

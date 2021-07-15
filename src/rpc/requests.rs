@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Deserialize;
 
 use crate::moderation::ModerationCategories;
@@ -9,6 +11,12 @@ pub enum RpcMethods {
     img_proxy_describe,
     img_proxy_report,
     img_proxy_describe_report,
+}
+
+impl fmt::Display for RpcMethods {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 // RPC Header
 #[derive(Deserialize)]

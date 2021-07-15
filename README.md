@@ -1,4 +1,5 @@
 # NFT Image Proxy
+[![Build](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml/badge.svg)](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml)
 
 Image Proxy supporting automatic content moderation for use with Tezos Wallets and other applications in the ecosystem.
 
