@@ -121,8 +121,10 @@ impl HttpClient {
                             "Document fetched for id={}, content_length={:?}, content_type={:?}",
                             req_id, content_length, content_type
                         );
-                        metrics::DOCUMENTS_FETCHED.inc();
-                        metrics::BYTES_FETCHED.inc_by(content_length as i64);
+                        metrics::DOCUMENT.with_label_values(&["fetched"]).inc();
+                        metrics::TRAFFIC
+                            .with_label_values(&["fetched"])
+                            .inc_by(content_length as i64);
                         metrics::DOCUMENT_SIZE
                             .with_label_values(&["size_bytes"])
                             .observe(content_length as f64);
@@ -135,12 +137,12 @@ impl HttpClient {
                         })
                     }
                     hyper::StatusCode::NOT_FOUND => {
-                        metrics::DOCUMENTS_FETCHED_ERROR.inc();
+                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                         error!("Document not found on remote, id={}", req_id);
                         Err(Errors::NotFound)
                     }
                     e => {
-                        metrics::DOCUMENTS_FETCHED_ERROR.inc();
+                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                         error!(
                             "Unable to fetch document, id={}, response_code={}",
                             req_id, e
@@ -149,7 +151,7 @@ impl HttpClient {
                     }
                 },
                 Err(e) => {
-                    metrics::DOCUMENTS_FETCHED_ERROR.inc();
+                    metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                     error!("Unable to fetch document, id={}, reason={}", req_id, e);
                     Err(Errors::FetchFailed)
                 }

@@ -9,6 +9,7 @@ use hyper::Response;
 use log::{error, info, warn};
 use uuid::Uuid;
 
+use crate::moderation::ModerationResponse;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
@@ -34,11 +35,10 @@ impl Methods {
             "New document fetch request, id={}, force={}, url={}",
             req_id, params.force, params.url
         );
-        metrics::API_REQUESTS_FETCH.inc();
 
         // If forced, fetch document and return
         if params.force {
-            metrics::DOCUMENTS_FORCED.inc();
+            metrics::DOCUMENT.with_label_values(&["forced"]).inc();
 
             let document = proxy.http_client.fetch(req_id, &params.url).await?;
             let document_type = SupportedMimeTypes::from_str(&document.content_type);
@@ -46,7 +46,9 @@ impl Methods {
             if document_type == SupportedMimeTypes::Unsupported {
                 return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
             }
-
+            metrics::TRAFFIC
+                .with_label_values(&["served"])
+                .inc_by(document.content_length as i64);
             return match &params.response_type {
                 ResponseType::Raw => Ok(document.to_response()),
                 ResponseType::Json => Ok(FetchResponse::to_response(
@@ -76,7 +78,7 @@ impl Methods {
                 warn!("Found more than one cache results for id={}", req_id);
             }
             let r = &cached_results[0];
-            metrics::CACHE_HITS.inc();
+            metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
                 "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, r.blocked, r.categories, r.provider
@@ -91,95 +93,93 @@ impl Methods {
                     req_id,
                 ))
             } else {
-                match (
-                    proxy.http_client.fetch(req_id, &params.url).await,
-                    &params.response_type,
-                ) {
-                    (Ok(doc), ResponseType::Raw) => Ok(doc.to_response()),
-                    (Ok(doc), ResponseType::Json) => Ok(FetchResponse::to_response(
+                let document = proxy.http_client.fetch(req_id, &params.url).await?;
+                metrics::TRAFFIC
+                    .with_label_values(&["served"])
+                    .inc_by(document.content_length as i64);
+                match params.response_type {
+                    ResponseType::Raw => Ok(document.to_response()),
+                    ResponseType::Json => Ok(FetchResponse::to_response(
                         RpcStatus::Ok,
                         ModerationStatus::Allowed,
                         Vec::new(),
-                        Some(doc.to_url()),
+                        Some(document.to_url()),
                         req_id,
                     )),
-                    (Err(e), _) => Ok(e.to_response(req_id.clone())),
                 }
             }
         } else {
-            metrics::CACHE_MISS.inc();
+            metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            match proxy.http_client.fetch(req_id, &params.url).await {
-                Ok(document) => {
-                    let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            let document = proxy.http_client.fetch(req_id, &params.url).await?;
 
-                    if document_type == SupportedMimeTypes::Unsupported {
-                        return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            if document_type == SupportedMimeTypes::Unsupported {
+                return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+            }
+
+            let max_document_size = proxy.moderation_provider.max_document_size();
+            let supported_types = proxy.moderation_provider.supported_types();
+
+            metrics::MODERATION.with_label_values(&["requests"]).inc();
+
+            // Resize the image if required or reformat to png if required
+            let formatted: Result<ModerationResponse, Errors> = if document.content_length
+                >= max_document_size
+                || !supported_types.contains(&document_type)
+            {
+                let resized_doc = document.resize_image(document_type, max_document_size)?;
+                proxy.moderation_provider.moderate(&resized_doc).await
+            } else {
+                proxy.moderation_provider.moderate(&document).await
+            };
+
+            metrics::TRAFFIC
+                .with_label_values(&["moderated"])
+                .inc_by(document.content_length as i64);
+
+            match formatted {
+                Ok(mr) => {
+                    let blocked = mr.categories.len() > 0;
+                    match proxy
+                        .database
+                        .add_moderation_result(&params.url, mr.provider, blocked, &mr.categories)
+                        .await
+                    {
+                        Ok(_) => info!("Database updated for id={}", req_id),
+                        Err(e) => {
+                            error!("Database not updated for id={}, reason={}", req_id, e)
+                        }
                     }
 
-                    let max_document_size = proxy.moderation_provider.max_document_size();
-                    let supported_types = proxy.moderation_provider.supported_types();
-
-                    metrics::MODERATION_REQUESTS.inc();
-
-                    // Resize the image if required or reformat to png if required
-                    let formatted = if document.content_length >= max_document_size
-                        || !supported_types.contains(&document_type)
-                    {
-                        let resized_doc =
-                            document.resize_image(document_type, max_document_size)?;
-                        proxy.moderation_provider.moderate(&resized_doc).await
+                    if blocked {
+                        metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
+                        Ok(FetchResponse::to_response(
+                            RpcStatus::Ok,
+                            ModerationStatus::Blocked,
+                            mr.categories.clone(),
+                            None,
+                            req_id,
+                        ))
                     } else {
-                        proxy.moderation_provider.moderate(&document).await
-                    };
-
-                    match formatted {
-                        Ok(mr) => {
-                            let blocked = mr.categories.len() > 0;
-                            match proxy
-                                .database
-                                .add_moderation_result(
-                                    &params.url,
-                                    mr.provider,
-                                    blocked,
-                                    &mr.categories,
-                                )
-                                .await
-                            {
-                                Ok(_) => info!("Database updated for id={}", req_id),
-                                Err(e) => {
-                                    error!("Database not updated for id={}, reason={}", req_id, e)
-                                }
-                            }
-
-                            if blocked {
-                                metrics::DOCUMENTS_BLOCKED.inc();
-                                Ok(FetchResponse::to_response(
-                                    RpcStatus::Ok,
-                                    ModerationStatus::Blocked,
-                                    mr.categories.clone(),
-                                    None,
-                                    req_id,
-                                ))
-                            } else {
-                                match params.response_type {
-                                    ResponseType::Raw => Ok(document.to_response()),
-                                    ResponseType::Json => Ok(FetchResponse::to_response(
-                                        RpcStatus::Ok,
-                                        ModerationStatus::Allowed,
-                                        Vec::new(),
-                                        Some(document.to_url()),
-                                        req_id,
-                                    )),
-                                }
-                            }
+                        metrics::TRAFFIC
+                            .with_label_values(&["served"])
+                            .inc_by(document.content_length as i64);
+                        match params.response_type {
+                            ResponseType::Raw => Ok(document.to_response()),
+                            ResponseType::Json => Ok(FetchResponse::to_response(
+                                RpcStatus::Ok,
+                                ModerationStatus::Allowed,
+                                Vec::new(),
+                                Some(document.to_url()),
+                                req_id,
+                            )),
                         }
-                        Err(e) => return Ok(e.to_response(req_id.clone())),
                     }
                 }
-                Err(e) => Ok(e.to_response(req_id.clone())),
+                Err(e) => return Ok(e.to_response(req_id.clone())),
             }
         }
     }
@@ -189,7 +189,6 @@ impl Methods {
         req_id: &Uuid,
         params: &DescribeRequestParams,
     ) -> Result<Response<Body>, Errors> {
-        metrics::API_REQUESTS_DESCRIBE.inc();
         info!(
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
@@ -240,7 +239,6 @@ impl Methods {
         req_id: &Uuid,
         params: &ReportRequestParams,
     ) -> Result<Response<Body>, Errors> {
-        metrics::API_REQUESTS_REPORT.inc();
         info!("New report request, id={}, url={}", req_id, params.url);
         match proxy
             .database
