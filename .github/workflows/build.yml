@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:    
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - name: Cache dependencies
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-dependencies
+      with:
+        path: |
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+          ~/.cargo/bin
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          target
+        key: ${{ runner.os }}-build-cache-${{ hashFiles('Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-build-cache
+    - name: Build
+      run: cargo build
+    - name: Test
+      run: cargo test
