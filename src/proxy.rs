@@ -21,7 +21,7 @@ use crate::{
     moderation::{ModerationProvider, ModerationService},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::error;
@@ -37,7 +37,6 @@ type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub struct Proxy {
     pub config: Configuration,
     pub database: Database,
-    pub start_time: DateTime<Utc>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
 }
@@ -51,10 +50,10 @@ impl Proxy {
         let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
+        metrics::START_TIME.set(Utc::now().timestamp());
         Ok(Proxy {
             config: config.clone(),
             database: database,
-            start_time: Utc::now(),
             moderation_provider: moderation_provider,
             http_client: http_client,
         })
@@ -99,9 +98,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .body(Body::default())
             .unwrap_or_default()),
         (&Method::GET, "/info") => info().await,
-        (&Method::GET, "/metrics") if proxy.config.metrics_enabled => {
-            metrics(&proxy.start_time).await
-        }
+        (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics().await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::default())
@@ -133,20 +130,25 @@ async fn info() -> Result<Response<Body>, GenericError> {
         .unwrap_or_default())
 }
 
-async fn metrics(service_start_time: &DateTime<Utc>) -> Result<Response<Body>, GenericError> {
+async fn metrics() -> Result<Response<Body>, GenericError> {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
-    let uptime = Utc::now().time() - service_start_time.time();
-    metrics::UPTIME.reset();
-    metrics::UPTIME.inc_by(uptime.num_seconds());
 
     Process::myself()
         .ok()
         .map(|p| p.status().ok())
         .flatten()
         .map(|status| {
-            status.vmsize.map(|s| metrics::MEM_VIRT.set(s as i64));
-            status.vmrss.map(|s| metrics::MEM_RSS.set(s as i64));
+            status.vmsize.map(|s| {
+                metrics::MEMORY
+                    .with_label_values(&["vmsize"])
+                    .set(s as i64)
+            });
+            status.vmrss.map(|s| {
+                metrics::MEMORY
+                    .with_label_values(&["vmrss"])
+                    .set(s as i64)
+            });
         });
 
     let encode_result = encoder.encode(&REGISTRY.gather(), &mut buffer);
@@ -179,26 +181,31 @@ async fn rpc(
     req: Request<Body>,
     req_id: Uuid,
 ) -> Result<Response<Body>, Errors> {
-    metrics::API_REQUESTS.inc();
     match hyper::body::to_bytes(req.into_body()).await {
         Ok(body) => match decode::<MethodHeader>(&body) {
-            Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => match header.method {
-                RpcMethods::img_proxy_fetch => {
-                    let params = decode::<FetchRequest>(&body)?;
-                    Methods::fetch(proxy, &req_id, &params.params).await
+            Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => {
+                let method = header.method;
+                metrics::API_REQUESTS
+                    .with_label_values(&[method.to_string().clone().as_str()])
+                    .inc();
+                match method {
+                    RpcMethods::img_proxy_fetch => {
+                        let params = decode::<FetchRequest>(&body)?;
+                        Methods::fetch(proxy, &req_id, &params.params).await
+                    }
+                    RpcMethods::img_proxy_describe => {
+                        let params = decode::<DescribeRequest>(&body)?;
+                        Methods::describe(proxy, &req_id, &params.params).await
+                    }
+                    RpcMethods::img_proxy_report => {
+                        let params = decode::<ReportRequest>(&body)?;
+                        Methods::report(proxy, &req_id, &params.params).await
+                    }
+                    RpcMethods::img_proxy_describe_report => {
+                        Methods::describe_report(proxy, &req_id).await
+                    }
                 }
-                RpcMethods::img_proxy_describe => {
-                    let params = decode::<DescribeRequest>(&body)?;
-                    Methods::describe(proxy, &req_id, &params.params).await
-                }
-                RpcMethods::img_proxy_report => {
-                    let params = decode::<ReportRequest>(&body)?;
-                    Methods::report(proxy, &req_id, &params.params).await
-                }
-                RpcMethods::img_proxy_describe_report => {
-                    Methods::describe_report(proxy, &req_id).await
-                }
-            },
+            }
             Ok(_) => Err(Errors::InvalidRpcVersionError),
             Err(e) => Err(e),
         },
