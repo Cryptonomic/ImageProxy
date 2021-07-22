@@ -13,3 +13,4 @@ lib/*
 **/dist
 **/build
 .github
+**/*.md
