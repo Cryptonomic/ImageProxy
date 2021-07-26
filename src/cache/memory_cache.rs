@@ -67,19 +67,9 @@ where
         } else {
             match (self.items.write(), self.lru.write(), self.key_map.write()) {
                 (Ok(mut item_map), Ok(mut lru), Ok(mut key_map)) => {
-                    if item_map.contains_key(&key) {
-                        item_map.insert(key.clone(), value);
-                        lru.push_back(key.clone());
-                        key_map.insert(key, lru.len());
-                    }
-                    else {
+                    if !item_map.contains_key(&key) {
                         let current_size = self.current_size.load(Ordering::SeqCst);
-                        if self.max_size_in_bytes - current_size  >= value.size_in_bytes() {
-                            self.current_size.fetch_add(value.size_in_bytes(), Ordering::SeqCst);
-                            item_map.insert(key.clone(), value);
-                            lru.push_back(key.clone());
-                            key_map.insert(key, lru.len());
-                        } else {
+                        if self.max_size_in_bytes - current_size  < value.size_in_bytes() {
                             debug!(
                                 "Running eviction, current_capacity:{}, required:{}",
                                 current_size,
@@ -105,13 +95,12 @@ where
                                 value.size_in_bytes(),
                                 evicted_count
                             );
-
-                            self.current_size.fetch_add(value.size_in_bytes(), Ordering::SeqCst);
-                            item_map.insert(key.clone(), value);
-                            lru.push_back(key.clone());
-                            key_map.insert(key, lru.len());
                         }
+                        self.current_size.fetch_add(value.size_in_bytes(), Ordering::SeqCst);
                     }
+                    item_map.insert(key.clone(), value);
+                    lru.push_back(key.clone());
+                    key_map.insert(key, lru.len());
                 }
                 _ =>
                     error!("Item or Lru cache is poisoned, a write error was possibly encountered elsewhere")
@@ -221,7 +210,7 @@ mod tests {
     }
 
     fn get_item_with_drop_counter(id:u64, item_size: u64, drop_counter: Arc<AtomicU64>) -> Arc<DummyData> {
-        Arc::new(DummyData{id, item_size, drop_counter: Some(drop_counter.clone())})
+        Arc::new(DummyData{id, item_size, drop_counter: Some(drop_counter)})
     }
     
     /// Tests whether the cache size is limited by the size of the items
@@ -359,7 +348,7 @@ mod tests {
         for i in 0..expected_cache_capacity {
             let cache_ref = cache.clone();
             children.push(thread::spawn(move || {
-                cache_ref.to_owned().put(i.to_string(), get_item(i, item_size_in_bytes));
+                cache_ref.put(i.to_string(), get_item(i, item_size_in_bytes));
             }));
         }
 
@@ -377,7 +366,7 @@ mod tests {
         for _ in 0..8192 {
             let cache_ref = cache.clone();
             children.push(thread::spawn(move || {                
-                let item = cache_ref.to_owned().get(&key.to_string());
+                let item = cache_ref.get(&key.to_string());
                 assert!(item.is_some());
                 let item = item.unwrap();
                 assert_eq!(item.id, key);

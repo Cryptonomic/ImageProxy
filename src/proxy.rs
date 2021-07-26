@@ -7,6 +7,7 @@ use crate::document::Document;
 use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
+use crate::http::filters::UriFilter;
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
@@ -40,7 +41,7 @@ pub struct Proxy {
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
-    pub cache: Option<Arc<Box<dyn Cache<String, Document> + Send + Sync>>>,
+    pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
 }
 
 impl Proxy {
@@ -49,20 +50,21 @@ impl Proxy {
         let moderation_provider = ModerationService::get_provider(config)?;
         let dns_resolver = StandardDnsResolver {};
         //TODO: Add more filters here
-        let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
+            vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
         Ok(Proxy {
             config: config.clone(),
-            database: database,
-            moderation_provider: moderation_provider,
-            http_client: http_client,
+            database,
+            moderation_provider,
+            http_client,
             cache: get_cache(&config.cache_config),
         })
     }
 }
 
-pub fn authenticate(api_keys: &Vec<String>, req: &Request<Body>) -> bool {
+pub fn authenticate(api_keys: &[String], req: &Request<Body>) -> bool {
     match req.headers().get("apikey") {
         Some(h) => match String::from_utf8(h.as_bytes().to_vec()) {
             Ok(key) => api_keys.contains(&key),
@@ -86,7 +88,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
                 let req_id = Uuid::new_v4();
                 rpc(proxy, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
-                    Ok(e.to_response(req_id))
+                    Ok(e.to_response(&req_id))
                 })
             } else {
                 Ok(Response::builder()
@@ -115,7 +117,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     response.or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(Errors::InternalError.to_response(Uuid::new_v4()))
+        Ok(Errors::InternalError.to_response(&Uuid::new_v4()))
     })
 }
 
@@ -124,7 +126,7 @@ async fn info() -> Result<Response<Body>, GenericError> {
         package_version: built_info::PKG_VERSION,
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
     };
-    let result = serde_json::to_string(&info).unwrap_or_default().to_owned();
+    let result = serde_json::to_string(&info).unwrap_or_default();
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
@@ -150,13 +152,11 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
 
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
-    Ok(Response::new(Body::from(
-        output.unwrap_or(String::default()),
-    )))
+    Ok(Response::new(Body::from(output.unwrap_or_default())))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
-    match serde_json::from_slice::<T>(&body) {
+    match serde_json::from_slice::<T>(body) {
         Ok(o) => Ok(o),
         Err(e) => {
             error!("Json decode error, reason:{}", e);
@@ -175,7 +175,7 @@ async fn rpc(
             Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => {
                 let method = header.method;
                 metrics::API_REQUESTS
-                    .with_label_values(&[method.to_string().clone().as_str()])
+                    .with_label_values(&[method.to_string().as_str()])
                     .inc();
                 match method {
                     RpcMethods::img_proxy_fetch => {

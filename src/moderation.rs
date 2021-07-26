@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors,
-};
+use crate::{aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors};
 
 #[derive(PartialEq)]
 pub enum SupportedMimeTypes {
@@ -17,7 +15,7 @@ pub enum SupportedMimeTypes {
 }
 
 impl SupportedMimeTypes {
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s {
             "image/jpeg" => SupportedMimeTypes::ImageJpeg,
             "image/jpg" => SupportedMimeTypes::ImageJpeg,
@@ -54,12 +52,9 @@ pub struct ModerationResponse {
 /// A trait that all moderation services must implement
 #[async_trait]
 pub trait ModerationProvider: Send + Sync {
-    async fn moderate(
-        self: &Self,
-        document: &Document,
-    ) -> Result<ModerationResponse, Errors>;
-    fn supported_types(self: &Self) -> Vec<SupportedMimeTypes>;
-    fn max_document_size(self: &Self) -> u64;
+    async fn moderate(&self, document: &Document) -> Result<ModerationResponse, Errors>;
+    fn supported_types(&self) -> Vec<SupportedMimeTypes>;
+    fn max_document_size(&self) -> u64;
 }
 
 #[derive(Clone)]
@@ -67,18 +62,18 @@ pub struct NullProvider {}
 
 #[async_trait]
 impl ModerationProvider for NullProvider {
-    async fn moderate(self: &Self, _: &Document) -> Result<ModerationResponse, Errors> {
+    async fn moderate(&self, _: &Document) -> Result<ModerationResponse, Errors> {
         Ok(ModerationResponse {
             categories: Vec::new(),
             provider: ModerationService::None,
         })
     }
 
-    fn supported_types(self: &Self) -> Vec<SupportedMimeTypes> {
+    fn supported_types(&self) -> Vec<SupportedMimeTypes> {
         vec![SupportedMimeTypes::ImageJpeg, SupportedMimeTypes::ImagePng]
     }
 
-    fn max_document_size(self: &Self) -> u64 {
+    fn max_document_size(&self) -> u64 {
         5242880
     }
 }

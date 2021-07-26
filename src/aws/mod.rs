@@ -32,7 +32,7 @@ pub struct Rekognition {
 #[async_trait]
 impl ModerationProvider for Rekognition {
     async fn moderate(
-        self: &Self,
+        &self,
         document: &Document,
     ) -> Result<crate::moderation::ModerationResponse, Errors> {
         debug!("New Rekognition request");
@@ -55,11 +55,11 @@ impl ModerationProvider for Rekognition {
         }
     }
 
-    fn supported_types(self: &Self) -> Vec<SupportedMimeTypes> {
+    fn supported_types(&self) -> Vec<SupportedMimeTypes> {
         vec![SupportedMimeTypes::ImageJpeg, SupportedMimeTypes::ImagePng]
     }
 
-    fn max_document_size(self: &Self) -> u64 {
+    fn max_document_size(&self) -> u64 {
         5242880 // As per AWS documentation, 5 MB binary limit
     }
 }
@@ -122,7 +122,7 @@ impl Rekognition {
         );
         let signing_key =
             get_signature_key(&self.secret_key, &date_stamp[..], &self.region, service);
-        let signature = sign(&signing_key, &string_to_sign.as_bytes());
+        let signature = sign(&signing_key, string_to_sign.as_bytes());
         let authorization_header = format!(
             "{} Credential={}/{}, SignedHeaders={}, Signature={}",
             algorithm,
@@ -157,9 +157,9 @@ impl Rekognition {
         }
     }
 
-    pub fn new(aws_region: &String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {        
+    pub fn new(aws_region: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Rekognition {
-            region: aws_region.clone(),
+            region: aws_region.to_string(),
             access_key: env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID key not set"),
             secret_key: env::var("AWS_SECRET_ACCESS_KEY")
                 .expect("AWS_SECRET_ACCESS_KEY key not set"),

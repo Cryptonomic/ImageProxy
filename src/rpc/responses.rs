@@ -115,8 +115,8 @@ impl FetchResponse {
             rpc_status,
             result: ModerationResult {
                 moderation_status,
-                categories: categories.clone(),
-                data: data.unwrap_or(String::new()),
+                categories,
+                data: data.unwrap_or_default(),
             },
         };
 
@@ -128,7 +128,7 @@ impl FetchResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id)
             }
         }
     }
@@ -154,7 +154,7 @@ impl DescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id)
             }
         }
     }
@@ -167,7 +167,7 @@ impl ReportResponse {
             rpc_status,
             result: ReportResult {
                 url: String::from(url),
-                id: req_id.clone(),
+                id: *req_id,
             },
         };
 
@@ -179,7 +179,7 @@ impl ReportResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id)
             }
         }
     }
@@ -205,7 +205,7 @@ impl ReportDescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id.clone())
+                Errors::InternalError.to_response(req_id)
             }
         }
     }

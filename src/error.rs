@@ -2,8 +2,10 @@ use hyper::{Body, Response};
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::responses::*;
-use super::VERSION;
+use crate::rpc::{
+    responses::{ErrorResponse, RpcStatus},
+    VERSION,
+};
 
 #[derive(Serialize)]
 pub struct RpcError {

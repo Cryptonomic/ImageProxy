@@ -58,7 +58,7 @@ pub struct CacheConfig {
 }
 
 /// Factory method for cache
-pub fn get_cache<K, V>(config: &CacheConfig) -> Option<Arc<Box<dyn Cache<K, V> + Send + Sync>>>
+pub fn get_cache<K, V>(config: &CacheConfig) -> Option<Box<dyn Cache<K, V> + Send + Sync>>
 where
     K: 'static + Hash + Eq + Clone + Send + Sync,
     V: 'static + ByteSizeable + Send + Sync,
@@ -68,7 +68,7 @@ where
             let cache = MemoryBoundedLruCache::new(
                 config.memory_cache_config.max_cache_size_mb * 1024 * 1024,
             );
-            Some(Arc::new(Box::new(cache)))
+            Some(Box::new(cache))
         }
         CacheType::DiskCache => {
             error!("Cache type:{:?} not supported yet", config.cache_type);

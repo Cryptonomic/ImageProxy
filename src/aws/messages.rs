@@ -25,7 +25,7 @@ impl RekognitionResponse {
             .ModerationLabels
             .iter()
             .map(|l| l.ParentName.clone())
-            .filter(|l| l.len() > 0)
+            .filter(|l| !l.is_empty())
             .collect();
         labels
             .iter()
