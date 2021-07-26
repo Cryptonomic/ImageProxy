@@ -52,6 +52,7 @@ impl Proxy {
         let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
+        metrics::START_TIME.set(Utc::now().timestamp());
         Ok(Proxy {
             config: config.clone(),
             database: database,
