@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Deserialize;
 
 use crate::moderation::ModerationCategories;
@@ -10,6 +12,12 @@ pub enum RpcMethods {
     img_proxy_report,
     img_proxy_describe_report,
 }
+
+impl fmt::Display for RpcMethods {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 // RPC Header
 #[derive(Deserialize)]
 pub struct MethodHeader {
@@ -19,9 +27,17 @@ pub struct MethodHeader {
 
 // Fetch method struct
 #[derive(Deserialize)]
+pub enum ResponseType {
+    Json,
+    Raw,
+}
+
+// Fetch method struct
+#[derive(Deserialize)]
 pub struct FetchRequestParams {
     pub url: String,
     pub force: bool,
+    pub response_type: ResponseType,
 }
 
 #[derive(Deserialize)]

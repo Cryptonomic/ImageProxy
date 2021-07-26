@@ -1,6 +1,5 @@
 target/**
 log
-sql
 .vscode/**
 docker-compose.yml
 Dockerfile
@@ -10,3 +9,10 @@ dashboard-ui/node_modules
 dashboard-ui/build
 proxy.conf
 log4rs.yml
+.env
+lib/*
+**/node_modules
+**/dist
+**/build
+.github
+**/*.md
