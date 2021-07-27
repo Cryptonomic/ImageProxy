@@ -15,9 +15,9 @@ pub trait Cache<K, V>
 where
     K: 'static + Hash + Eq + Clone,
 {
-    fn put(&self, key: K, value: Arc<V>);
+    fn put(&self, key: K, value: Arc<V>) -> bool;
     fn get(&self, key: &K) -> Option<Arc<V>>;
-    fn remove(&self, key: &K);
+    fn remove(&self, key: &K) -> Option<Arc<V>>;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn clear(&self);
