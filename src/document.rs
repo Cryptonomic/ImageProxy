@@ -3,15 +3,16 @@ extern crate hyper;
 
 use std::io::Cursor;
 
+use crate::cache::ByteSizeable;
 use crate::moderation::SupportedMimeTypes;
 use crate::rpc::error::Errors;
 
 use base64::encode;
 use hyper::{body::Bytes, Body, Response};
 
-use image::{self, GenericImageView};
 use image::DynamicImage;
 use image::ImageFormat;
+use image::{self, GenericImageView};
 use log::{debug, error};
 use uuid::Uuid;
 
@@ -20,6 +21,13 @@ pub struct Document {
     pub content_type: String,
     pub content_length: u64,
     pub bytes: Bytes,
+    pub url: String,
+}
+
+impl ByteSizeable for Document {
+    fn size_in_bytes(&self) -> u64 {
+        self.bytes.len() as u64
+    }
 }
 
 impl Document {
@@ -62,6 +70,7 @@ impl Document {
                 content_length: bytes.len() as u64,
                 content_type: String::from("image/png"),
                 bytes: Bytes::copy_from_slice(bytes.as_slice()),
+                url: self.url.clone(),
             }),
             Err(e) => {
                 error!("Error writing out image to buffer, reason={}", e);

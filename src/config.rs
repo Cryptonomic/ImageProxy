@@ -1,7 +1,7 @@
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
-use crate::moderation::ModerationService;
+use crate::{cache::CacheConfig, moderation::ModerationService};
 
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
@@ -43,6 +43,7 @@ pub struct Configuration {
     pub api_keys: Vec<String>,
     pub database: Database,
     pub moderation: ModerationConfig,
+    pub cache_config: CacheConfig,
 }
 
 impl Configuration {

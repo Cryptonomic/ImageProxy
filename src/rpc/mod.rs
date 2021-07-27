@@ -6,10 +6,13 @@ use std::sync::Arc;
 
 use hyper::Body;
 use hyper::Response;
+use log::debug;
 use log::{error, info, warn};
 use uuid::Uuid;
 
+use crate::document::Document;
 use crate::moderation::ModerationResponse;
+use crate::utils::sha256;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
@@ -23,9 +26,31 @@ use responses::*;
 /// rpc version information
 pub static VERSION: &str = "1.0.0";
 
-pub struct Methods {}
+pub struct Methods;
 
 impl Methods {
+    async fn fetch_document(
+        proxy: Arc<Proxy>,
+        req_id: &Uuid,
+        url: &String,
+    ) -> Result<Arc<Document>, Errors> {
+        if let Some(cache) = &proxy.cache {
+            let cache_key = sha256(url.as_bytes());
+            if let Some(document) = cache.get(&cache_key) {
+                debug!("Fetched document from cache, url:{}", url);
+                Ok(document)
+            } else {
+                let document = Arc::new(proxy.http_client.fetch(req_id, url).await?);
+                debug!("Inserted document into cache, url:{}", url);
+                cache.put(cache_key, document.clone());
+                Ok(document)
+            }
+        } else {
+            let document = proxy.http_client.fetch(req_id, url).await?;
+            Ok(Arc::new(document))
+        }
+    }
+
     pub async fn fetch(
         proxy: Arc<Proxy>,
         req_id: &Uuid,
@@ -40,7 +65,7 @@ impl Methods {
         if params.force {
             metrics::DOCUMENT.with_label_values(&["forced"]).inc();
 
-            let document = proxy.http_client.fetch(req_id, &params.url).await?;
+            let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
             let document_type = SupportedMimeTypes::from_str(&document.content_type);
 
             if document_type == SupportedMimeTypes::Unsupported {
@@ -48,7 +73,7 @@ impl Methods {
             }
             metrics::TRAFFIC
                 .with_label_values(&["served"])
-                .inc_by(document.content_length as i64);
+                .inc_by(document.bytes.len() as u64);
             return match &params.response_type {
                 ResponseType::Raw => Ok(document.to_response()),
                 ResponseType::Json => Ok(FetchResponse::to_response(
@@ -93,10 +118,10 @@ impl Methods {
                     req_id,
                 ))
             } else {
-                let document = proxy.http_client.fetch(req_id, &params.url).await?;
+                let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
                 metrics::TRAFFIC
                     .with_label_values(&["served"])
-                    .inc_by(document.content_length as i64);
+                    .inc_by(document.bytes.len() as u64);
                 match params.response_type {
                     ResponseType::Raw => Ok(document.to_response()),
                     ResponseType::Json => Ok(FetchResponse::to_response(
@@ -113,7 +138,7 @@ impl Methods {
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            let document = proxy.http_client.fetch(req_id, &params.url).await?;
+            let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
 
             let document_type = SupportedMimeTypes::from_str(&document.content_type);
             if document_type == SupportedMimeTypes::Unsupported {
@@ -138,7 +163,7 @@ impl Methods {
 
             metrics::TRAFFIC
                 .with_label_values(&["moderated"])
-                .inc_by(document.content_length as i64);
+                .inc_by(document.bytes.len() as u64);
 
             match formatted {
                 Ok(mr) => {
@@ -166,7 +191,7 @@ impl Methods {
                     } else {
                         metrics::TRAFFIC
                             .with_label_values(&["served"])
-                            .inc_by(document.content_length as i64);
+                            .inc_by(document.bytes.len() as u64);
                         match params.response_type {
                             ResponseType::Raw => Ok(document.to_response()),
                             ResponseType::Json => Ok(FetchResponse::to_response(
