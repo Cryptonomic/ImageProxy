@@ -46,7 +46,7 @@ pub struct Proxy {
 
 impl Proxy {
     pub async fn new(config: &Configuration) -> Result<Proxy, GenericError> {
-        let database = Database::new(config).await?;
+        let database = Database::new(&config.database).await?;
         let moderation_provider = ModerationService::get_provider(config)?;
         let dns_resolver = StandardDnsResolver {};
         //TODO: Add more filters here
