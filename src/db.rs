@@ -2,9 +2,9 @@ extern crate crypto;
 use std::time::Duration;
 
 use crate::{
+    config::DatabaseConfig,
     moderation::{ModerationCategories, ModerationService},
     utils::sha512,
-    Configuration,
 };
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
@@ -37,10 +37,10 @@ pub struct ReportRow {
 }
 
 impl Database {
-    pub async fn new(conf: &Configuration) -> Result<Database> {
+    pub async fn new(config: &DatabaseConfig) -> Result<Database> {
         let connection_string = format!(
             "postgresql://{}:{}@{}:{}",
-            conf.database.username, conf.database.password, conf.database.host, conf.database.port
+            config.username, config.password, config.host, config.port
         );
         let pg_mgr = PostgresConnectionManager::new_from_stringlike(
             connection_string,
@@ -50,9 +50,9 @@ impl Database {
 
         Ok(Database {
             pool: Pool::builder()
-                .connection_timeout(Duration::new(30, 0))
-                .min_idle(Some(2))
-                .max_size(16)
+                .connection_timeout(Duration::new(config.pool_connection_timeout, 0))
+                .min_idle(Some(config.pool_idle_connections))
+                .max_size(config.pool_max_connections)
                 .build(pg_mgr)
                 .await
                 .unwrap(),
