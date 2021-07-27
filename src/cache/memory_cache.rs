@@ -1,4 +1,4 @@
-use log::{debug, error, warn};
+use log::{error, warn};
 use prometheus::IntGaugeVec;
 use std::collections::VecDeque;
 use std::hash::Hash;
