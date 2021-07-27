@@ -1,9 +1,12 @@
+import { DescribeResponse, ImageProxyError } from "nft-image-proxy";
 import React, { useEffect, useState } from "react";
-import { getModerationReports, ModerationInfo } from "../utils/ImageProxy";
+import { getModerationReports } from "../utils/ImageProxy";
 import SortByHeader from "./SortByHeader";
 
 const ModerationTable: React.FC = () => {
-  const [reportData, setReportData] = useState<ModerationInfo[]>([]);
+  const [reportData, setReportData] = useState<
+    DescribeResponse | ImageProxyError
+  >();
   useEffect(() => {
     getModerationReports().then((data) => setReportData(data));
   }, []);

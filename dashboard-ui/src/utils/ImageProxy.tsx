@@ -1,32 +1,30 @@
 import config from "../config.json";
 import parsePrometheusTextFormat from "parse-prometheus-text-format";
+import {
+  DescribeResponse,
+  FetchResponse,
+  ImageProxyError,
+  ImageProxyServer,
+} from "nft-image-proxy";
 
 export interface BuildInfo {
   package_version: string;
   git_version: string;
 }
 
-export interface Report {
-  [key: string]: any;
-  categories: string[];
-  url: string;
-  id: string;
-  updated_at: string;
-}
-
-export interface ModerationInfo {
-  url: string;
-  status: string;
-  categories: string[];
-  provider: string;
-  index: number;
-}
+const server: ImageProxyServer = {
+  url: config.proxyURL,
+  version: "1.0.0",
+  apikey: config.apikey,
+};
 
 export const getInfo = async (): Promise<BuildInfo> => {
   return (await fetch(`${config.proxyURL}/info`)).json();
 };
 
-export const getReports = async (): Promise<Report[]> => {
+export const getReports = async (): Promise<
+  DescribeResponse | ImageProxyError
+> => {
   const init = {
     method: "POST",
     body: JSON.stringify({
@@ -37,13 +35,15 @@ export const getReports = async (): Promise<Report[]> => {
       apikey: config.apikey,
     },
   };
-  const res: Report[] = (
+  const res = (
     await fetch(`${config.proxyURL}`, init).then((res) => res.json())
   ).result;
   return res;
 };
 
-export const getModerationReports = async (): Promise<ModerationInfo[]> => {
+export const getModerationReports = async (): Promise<
+  FetchResponse | ImageProxyError
+> => {
   const init = {
     method: "POST",
     body: JSON.stringify({
@@ -57,13 +57,12 @@ export const getModerationReports = async (): Promise<ModerationInfo[]> => {
       apikey: config.apikey,
     },
   };
-  const res: ModerationInfo[] = await fetch(`${config.proxyURL}`, init).then(
-    (res) =>
-      res
-        .json()
-        .then((json) =>
-          json.result.map((entry: any, i: number) => ({ ...entry, index: i }))
-        )
+  const res = await fetch(`${config.proxyURL}`, init).then((res) =>
+    res
+      .json()
+      .then((json) =>
+        json.result.map((entry: any, i: number) => ({ ...entry, index: i }))
+      )
   );
 
   return res;
