@@ -151,7 +151,7 @@ impl Methods {
             metrics::MODERATION.with_label_values(&["requests"]).inc();
 
             // Resize the image if required or reformat to png if required
-            let formatted: Result<ModerationResponse, Errors> = if document.content_length
+            let formatted: Result<ModerationResponse, Errors> = if document.bytes.len() as u64
                 >= max_document_size
                 || !supported_types.contains(&document_type)
             {
