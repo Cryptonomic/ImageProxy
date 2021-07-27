@@ -1,7 +1,9 @@
 extern crate bb8_postgres;
 extern crate tokio_postgres;
 
+use crate::cache::{get_cache, Cache};
 use crate::dns::StandardDnsResolver;
+use crate::document::Document;
 use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
@@ -25,7 +27,6 @@ use chrono::Utc;
 
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::error;
-use procfs::process::Process;
 use prometheus::Encoder;
 use serde::de;
 use serde_json;
@@ -39,6 +40,7 @@ pub struct Proxy {
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
+    pub cache: Option<Arc<Box<dyn Cache<String, Document> + Send + Sync>>>,
 }
 
 impl Proxy {
@@ -50,12 +52,12 @@ impl Proxy {
         let uri_filters = vec![PrivateNetworkFilter::new(Box::new(dns_resolver.clone()))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
-        metrics::START_TIME.set(Utc::now().timestamp());
         Ok(Proxy {
             config: config.clone(),
             database: database,
             moderation_provider: moderation_provider,
             http_client: http_client,
+            cache: get_cache(&config.cache_config),
         })
     }
 }
@@ -76,7 +78,7 @@ pub fn authenticate(api_keys: &Vec<String>, req: &Request<Body>) -> bool {
 pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
     metrics::ACTIVE_CLIENTS.inc();
-    let response_time_start = Utc::now();
+    let response_time_start = Utc::now().timestamp_millis();
 
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
@@ -98,7 +100,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .body(Body::default())
             .unwrap_or_default()),
         (&Method::GET, "/info") => info().await,
-        (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics().await,
+        (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::default())
@@ -107,7 +109,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
 
     metrics::API_RESPONSE_TIME
         .with_label_values(&["overall"])
-        .observe((Utc::now().time() - response_time_start.time()).num_milliseconds() as f64);
+        .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
     metrics::ACTIVE_CLIENTS.dec();
 
     response.or_else(|e| {
@@ -130,26 +132,13 @@ async fn info() -> Result<Response<Body>, GenericError> {
         .unwrap_or_default())
 }
 
-async fn metrics() -> Result<Response<Body>, GenericError> {
+async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
 
-    Process::myself()
-        .ok()
-        .map(|p| p.status().ok())
-        .flatten()
-        .map(|status| {
-            status.vmsize.map(|s| {
-                metrics::MEMORY
-                    .with_label_values(&["vmsize"])
-                    .set(s as i64)
-            });
-            status.vmrss.map(|s| {
-                metrics::MEMORY
-                    .with_label_values(&["vmrss"])
-                    .set(s as i64)
-            });
-        });
+    if let Some(cache) = &proxy.cache {
+        cache.gather_metrics(&metrics::CACHE_METRICS);
+    }
 
     let encode_result = encoder.encode(&REGISTRY.gather(), &mut buffer);
     if encode_result.is_err() {

@@ -1,17 +1,13 @@
 extern crate crypto;
 use std::time::Duration;
 
-use crate::{
-    moderation::{ModerationCategories, ModerationService},
-    Configuration,
-};
+use crate::{Configuration, moderation::{ModerationCategories, ModerationService}, utils::sha512};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
 use log::debug;
 use tokio_postgres::NoTls;
 
-use crypto::{digest::Digest, sha2::Sha512};
 use uuid::Uuid;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -37,12 +33,6 @@ pub struct ReportRow {
 }
 
 impl Database {
-    fn sha512(input: &[u8]) -> String {
-        let mut hasher = Sha512::new();
-        hasher.input(input);
-        hasher.result_str()
-    }
-
     pub async fn new(conf: &Configuration) -> Result<Database> {
         let connection_string = format!(
             "postgresql://{}:{}@{}:{}",
@@ -72,7 +62,7 @@ impl Database {
         categories: &Vec<ModerationCategories>,
     ) -> Result<()> {
         let id = id.to_string();
-        let url_hash = Database::sha512(url.as_bytes());
+        let url_hash = sha512(url.as_bytes());
         let timestamp = chrono::Utc::now();
         let cat_str = serde_json::to_string(categories).unwrap_or(String::from("json_error"));
         let conn = self.pool.get().await?;
@@ -119,7 +109,7 @@ impl Database {
         blocked: bool,
         categories: &Vec<ModerationCategories>,
     ) -> Result<()> {
-        let url_hash = Database::sha512(url.as_bytes());
+        let url_hash = sha512(url.as_bytes());
         let timestamp = chrono::Utc::now();
         let cat_str = serde_json::to_string(categories).unwrap_or(String::from("json_error"));
         let provider_str = serde_json::to_string(&provider).unwrap_or(String::from("json_error"));
@@ -144,7 +134,7 @@ impl Database {
         blocked: bool,
         categories: &Vec<ModerationCategories>,
     ) -> Result<()> {
-        let url_hash = Database::sha512(url.as_bytes());
+        let url_hash = sha512(url.as_bytes());
         let doc_hash = ""; //FIXME
         let timestamp = chrono::Utc::now();
         let provider_str = serde_json::to_string(&provider).unwrap_or(String::from("json_error"));
@@ -158,7 +148,7 @@ impl Database {
     }
 
     pub async fn get_moderation_result(&self, url: &Vec<String>) -> Result<Vec<DocumentCacheRow>> {
-        let url_hashes: Vec<String> = url.iter().map(|u| Database::sha512(u.as_bytes())).collect();
+        let url_hashes: Vec<String> = url.iter().map(|u| sha512(u.as_bytes())).collect();
         let conn = self.pool.get().await?;
         let results = conn
             .query(

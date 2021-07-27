@@ -124,16 +124,17 @@ impl HttpClient {
                         metrics::DOCUMENT.with_label_values(&["fetched"]).inc();
                         metrics::TRAFFIC
                             .with_label_values(&["fetched"])
-                            .inc_by(content_length as i64);
+                            .inc_by(bytes.len() as u64);
                         metrics::DOCUMENT_SIZE
                             .with_label_values(&["size_bytes"])
-                            .observe(content_length as f64);
+                            .observe(bytes.len() as f64);
 
                         Ok(Document {
                             id: req_id.clone(),
                             content_type: content_type,
                             content_length: content_length,
                             bytes: bytes,
+                            url: url.clone(),
                         })
                     }
                     hyper::StatusCode::NOT_FOUND => {
