@@ -224,12 +224,11 @@ mod tests {
     /// stored within in.
     #[test]
     fn test_memory_bound_behavior() {
-        let max_cache_size_in_bytes = 512_u64 * 1_000_000_u64;
+        let max_cache_size_in_bytes = 512_u64 * 100_000_u64;
         let item_size_in_bytes = 512_u64;
         let expected_cache_capacity = max_cache_size_in_bytes / item_size_in_bytes;
 
-        let cache: MemoryBoundedLruCache<String, DummyData> =
-            MemoryBoundedLruCache::new(max_cache_size_in_bytes);
+        let cache = MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
         // Insert many times the expected value
         (0..expected_cache_capacity + 1000).for_each(|i| {
@@ -277,8 +276,7 @@ mod tests {
         let item_size_in_bytes = 1024_u64;
         let expected_cache_capacity = max_cache_size_in_bytes / item_size_in_bytes;
         let drop_counter = Arc::new(AtomicU64::new(0));
-        let cache: MemoryBoundedLruCache<String, DummyData> =
-            MemoryBoundedLruCache::new(max_cache_size_in_bytes);
+        let cache = MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
         (0..expected_cache_capacity).for_each(|i| {
             cache.put(
@@ -326,8 +324,7 @@ mod tests {
         let item_size_in_bytes = 1024_u64;
         let expected_cache_capacity = max_cache_size_in_bytes / item_size_in_bytes;
 
-        let cache: MemoryBoundedLruCache<String, DummyData> =
-            MemoryBoundedLruCache::new(max_cache_size_in_bytes);
+        let cache = MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
         (0..expected_cache_capacity).for_each(|i| {
             cache.put(i.to_string(), get_item(i, item_size_in_bytes));
