@@ -11,17 +11,17 @@ pub fn sign(key: &[u8], msg: &[u8]) -> Vec<u8> {
 }
 
 pub fn get_signature_key(key: &str, date_stamp: &str, region: &str, service: &str) -> Vec<u8> {
-    let kdate = sign(&format!("AWS4{}", key).as_bytes(), &date_stamp.as_bytes());
-    let kregion = sign(&kdate, &region.as_bytes());
-    let kservice = sign(&kregion, &service.as_bytes());
-    let signing_key = sign(&kservice, &"aws4_request".as_bytes());
+    let kdate = sign(format!("AWS4{}", key).as_bytes(), date_stamp.as_bytes());
+    let kregion = sign(&kdate, region.as_bytes());
+    let kservice = sign(&kregion, service.as_bytes());
+    let signing_key = sign(&kservice, "aws4_request".as_bytes());
     signing_key.to_vec()
 }
 
-pub fn hash(to_hash: &String) -> String {
+pub fn hash(to_hash: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.input_str(to_hash);
-    return hasher.result_str();
+    hasher.result_str()
 }
 
 #[cfg(test)]

@@ -41,9 +41,9 @@ impl Document {
             SupportedMimeTypes::ImageTiff => image::load(cursor, ImageFormat::Tiff),
             SupportedMimeTypes::Unsupported => image::load(cursor, ImageFormat::Jpeg), //TODO
         };
-        img.or_else(|e| {
+        img.map_err(|e| {
             error!("Unable to open image, reason={}", e);
-            Err(Errors::InternalError)
+            Errors::InternalError
         })
     }
 
@@ -66,7 +66,7 @@ impl Document {
         let mut bytes: Vec<u8> = Vec::new();
         match new_img.write_to(&mut bytes, image::ImageOutputFormat::Png) {
             Ok(_) => Ok(Document {
-                id: self.id.clone(),
+                id: self.id,
                 content_length: bytes.len() as u64,
                 content_type: String::from("image/png"),
                 bytes: Bytes::copy_from_slice(bytes.as_slice()),

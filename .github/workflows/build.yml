@@ -33,6 +33,10 @@ jobs:
           target
         key: ${{ runner.os }}-build-cache-${{ hashFiles('Cargo.lock') }}
         restore-keys: ${{ runner.os }}-build-cache
+    - name: Install Clippy
+      run: rustup component add clippy
+    - name: Clippy
+      run: cargo clippy -- -D warnings
     - name: Build
       run: cargo build
     - name: Test

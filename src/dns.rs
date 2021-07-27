@@ -36,7 +36,7 @@ mod tests {
     fn test_dummy_dns_resolver() {
         let ip: IpAddr = "127.0.0.1".parse().unwrap();
         let ip2: IpAddr = "10.0.0.2".parse().unwrap();
-        let ip_vec = vec![ip.clone(), ip2.clone()];
+        let ip_vec = vec![ip, ip2];
         let resolver = DummyDnsResolver {
             resolved_address: ip_vec,
         };
