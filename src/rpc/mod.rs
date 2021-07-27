@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::document::Document;
 use crate::moderation::ModerationResponse;
-use crate::utils::sha512;
+use crate::utils::sha256;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
@@ -35,7 +35,7 @@ impl Methods {
         url: &String,
     ) -> Result<Arc<Document>, Errors> {
         if let Some(cache) = &proxy.cache {
-            let cache_key = sha512(url.as_bytes());
+            let cache_key = sha256(url.as_bytes());
             if let Some(document) = cache.get(&cache_key) {
                 debug!("Fetched document from cache, url:{}", url);
                 Ok(document)

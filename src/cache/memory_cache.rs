@@ -1,4 +1,4 @@
-use log::{debug, error, warn};
+use log::{error, warn};
 use prometheus::IntGaugeVec;
 use std::collections::VecDeque;
 use std::hash::Hash;
@@ -15,12 +15,11 @@ use super::{ByteSizeable, Cache};
 pub struct MemoryBoundedLruCache<K, V> {
     items: RwLock<HashMap<K, Arc<V>>>,
     lru: RwLock<VecDeque<K>>,
-    key_map: RwLock<HashMap<K, usize>>,
     max_size_in_bytes: u64,
     hits: AtomicI64,
     misses: AtomicI64,
     evictions: AtomicI64,
-    current_size: AtomicU64
+    current_size: AtomicU64,
 }
 
 impl<K, V> MemoryBoundedLruCache<K, V>
@@ -32,7 +31,6 @@ where
         MemoryBoundedLruCache {
             items: RwLock::new(HashMap::new()),
             lru: RwLock::new(VecDeque::new()),
-            key_map: RwLock::new(HashMap::new()),
             max_size_in_bytes,
             hits: AtomicI64::new(0),
             misses: AtomicI64::new(0),
@@ -61,73 +59,53 @@ where
         }
     }
 
-    fn put(&self, key: K, value: Arc<V>) {
+    fn put(&self, key: K, value: Arc<V>) -> bool {
         if value.size_in_bytes() >= self.max_size_in_bytes {
             warn!("Item size is bigger than configured cache size");
+            false
         } else {
-            match (self.items.write(), self.lru.write(), self.key_map.write()) {
-                (Ok(mut item_map), Ok(mut lru), Ok(mut key_map)) => {
-                    if item_map.contains_key(&key) {
-                        item_map.insert(key.clone(), value);
-                        lru.push_back(key.clone());
-                        key_map.insert(key, lru.len());
-                    }
-                    else {
+            match (self.items.write(), self.lru.write()) {
+                (Ok(mut item_map), Ok(mut lru)) => {
+                    if !item_map.contains_key(&key) {
                         let current_size = self.current_size.load(Ordering::SeqCst);
-                        if self.max_size_in_bytes - current_size  >= value.size_in_bytes() {
-                            self.current_size.fetch_add(value.size_in_bytes(), Ordering::SeqCst);
-                            item_map.insert(key.clone(), value);
-                            lru.push_back(key.clone());
-                            key_map.insert(key, lru.len());
-                        } else {
-                            debug!(
-                                "Running eviction, current_capacity:{}, required:{}",
-                                current_size,
-                                value.size_in_bytes()
-                            );
+                        if self.max_size_in_bytes - current_size < value.size_in_bytes() {
                             let mut evicted_size = 0_u64;
                             let mut evicted_count = 0;
                             while evicted_size < value.size_in_bytes() && lru.len() > 0 {
                                 if let Some(k) = lru.pop_front() {
-                                    key_map.remove(&k);
                                     if let Some(item) = item_map.remove(&k) {
                                         evicted_size += item.size_in_bytes();
                                         evicted_count += 1;
                                     }
                                 }
-                            }                           
+                            }
                             self.current_size.fetch_sub(evicted_size, Ordering::SeqCst);
-                            self.evictions.fetch_add(evicted_count as i64, Ordering::SeqCst);
-                            debug!(
-                                "Eviction completed, current_cache_capacity:{}, evicted:{}, required:{}, candidates:{}",
-                                current_size -  evicted_size,
-                                evicted_size,
-                                value.size_in_bytes(),
-                                evicted_count
-                            );
-
-                            self.current_size.fetch_add(value.size_in_bytes(), Ordering::SeqCst);
-                            item_map.insert(key.clone(), value);
-                            lru.push_back(key.clone());
-                            key_map.insert(key, lru.len());
+                            self.evictions
+                                .fetch_add(evicted_count as i64, Ordering::SeqCst);
                         }
+                        self.current_size
+                            .fetch_add(value.size_in_bytes(), Ordering::SeqCst);
                     }
+                    item_map.insert(key.clone(), value);
+                    lru.push_back(key);
+                    true
                 }
-                _ =>
-                    error!("Item or Lru cache is poisoned, a write error was possibly encountered elsewhere")
+                _ => {
+                    error!("Item or Lru cache is poisoned, a write error was possibly encountered elsewhere");
+                    false
+                }
             }
         }
     }
 
     fn get(&self, key: &K) -> Option<Arc<V>> {
-        match (self.items.read(), self.lru.write(), self.key_map.write()) {
-            (Ok(item_map), Ok(mut lru), Ok(mut key_map)) => {
+        match (self.items.read(), self.lru.write()) {
+            (Ok(item_map), Ok(mut lru)) => {
                 if let Some(item) = item_map.get(key) {
                     self.hits.fetch_add(1, Ordering::SeqCst);
-                    if let Some(index) = key_map.get(key) {
-                        lru.remove(*index);
+                    if let Some(index) = lru.iter().rposition(|k| k.eq(key)) {
+                        lru.remove(index);
                         lru.push_back(key.clone());
-                        key_map.insert(key.clone(), lru.len());
                     }
                     Some(item.clone())
                 } else {
@@ -142,30 +120,34 @@ where
         }
     }
 
-    fn remove(&self, key: &K) {
-        match (self.items.write(), self.lru.write(), self.key_map.write()) {
-            (Ok(mut item_map), Ok(mut lru), Ok(mut key_map)) => {
+    fn remove(&self, key: &K) -> Option<Arc<V>> {
+        match (self.items.write(), self.lru.write()) {
+            (Ok(mut item_map), Ok(mut lru)) => {
                 if let Some(item) = item_map.remove(key) {
-                    self.current_size.fetch_sub(item.size_in_bytes(), Ordering::SeqCst);
-                }
-                if let Some(index) = key_map.remove(key){
-                    lru.remove(index);
+                    self.current_size
+                        .fetch_sub(item.size_in_bytes(), Ordering::SeqCst);
+                    if let Some(index) = lru.iter().rposition(|k| k.eq(key)) {
+                        lru.remove(index);
+                    }
+                    Some(item)
+                } else {
+                    None
                 }
             }
-            _ =>
-                error!("Item cache is poisoned, a write error was possibly encountered elsewhere")
+            _ => {
+                error!("Item cache is poisoned, a write error was possibly encountered elsewhere");
+                None
+            }
         }
     }
 
     fn clear(&self) {
-        match (self.items.write(), self.lru.write(), self.key_map.write()) {
-            (Ok(mut item_map), Ok(mut lru), Ok(mut key_map)) => {
+        match (self.items.write(), self.lru.write()) {
+            (Ok(mut item_map), Ok(mut lru)) => {
                 item_map.clear();
                 lru.clear();
-                key_map.clear();
             }
-            _ =>
-                error!("Item cache is poisoned, a write error was possibly encountered elsewhere")
+            _ => error!("Item cache is poisoned, a write error was possibly encountered elsewhere"),
         }
     }
 
@@ -194,14 +176,14 @@ where
 #[cfg(test)]
 mod tests {
     use core::time;
-    use std:: thread;
-    
+    use std::thread;
+
     use super::*;
 
     struct DummyData {
         id: u64,
         item_size: u64,
-        drop_counter: Option<Arc<AtomicU64>>
+        drop_counter: Option<Arc<AtomicU64>>,
     }
 
     impl ByteSizeable for DummyData {
@@ -212,44 +194,73 @@ mod tests {
 
     impl Drop for DummyData {
         fn drop(&mut self) {
-            self.drop_counter.as_ref().map(|c| c.fetch_add(1, Ordering::SeqCst));            
+            self.drop_counter
+                .as_ref()
+                .map(|c| c.fetch_add(1, Ordering::SeqCst));
         }
     }
 
     fn get_item(id: u64, item_size: u64) -> Arc<DummyData> {
-        Arc::new(DummyData{id, item_size, drop_counter: None})
+        Arc::new(DummyData {
+            id,
+            item_size,
+            drop_counter: None,
+        })
     }
 
-    fn get_item_with_drop_counter(id:u64, item_size: u64, drop_counter: Arc<AtomicU64>) -> Arc<DummyData> {
-        Arc::new(DummyData{id, item_size, drop_counter: Some(drop_counter.clone())})
+    fn get_item_with_drop_counter(
+        id: u64,
+        item_size: u64,
+        drop_counter: Arc<AtomicU64>,
+    ) -> Arc<DummyData> {
+        Arc::new(DummyData {
+            id,
+            item_size,
+            drop_counter: Some(drop_counter),
+        })
     }
-    
+
     /// Tests whether the cache size is limited by the size of the items
     /// stored within in.
-    #[test]    
+    #[test]
     fn test_memory_bound_behavior() {
-        let max_cache_size_in_bytes = 512_u64 * 100_000_u64;
+        let max_cache_size_in_bytes = 512_u64 * 1_000_000_u64;
         let item_size_in_bytes = 512_u64;
         let expected_cache_capacity = max_cache_size_in_bytes / item_size_in_bytes;
-        
+
         let cache: MemoryBoundedLruCache<String, DummyData> =
             MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
         // Insert many times the expected value
-        (0..expected_cache_capacity + 1000).for_each(|i| { 
+        (0..expected_cache_capacity + 1000).for_each(|i| {
             cache.put(i.to_string(), get_item(i, item_size_in_bytes));
         });
 
         assert_eq!(cache.len(), expected_cache_capacity as usize);
+        assert_eq!(
+            cache.current_size.load(Ordering::SeqCst),
+            max_cache_size_in_bytes
+        );
 
-        // Insert an item with four the size of a regular item
-        // and assert that the cache len has reduced by 3        
+        // Insert an item with four times the size of a regular item
+        // and assert that the cache len has reduced by 3
         cache.put("4x".to_string(), get_item(0, item_size_in_bytes * 4));
-        assert_eq!(cache.len(), (expected_cache_capacity -3)as usize);
+        assert_eq!(cache.len(), (expected_cache_capacity - 3) as usize);
+        assert_eq!(
+            cache.current_size.load(Ordering::SeqCst),
+            max_cache_size_in_bytes
+        );
         cache.remove(&"4x".to_string());
+        assert_eq!(
+            cache.current_size.load(Ordering::SeqCst),
+            max_cache_size_in_bytes - (item_size_in_bytes * 4)
+        );
 
         // Insert an item that should not fit into the cache as per mem limit
-        cache.put("too_big".to_string(), get_item(9001, max_cache_size_in_bytes + 1));
+        cache.put(
+            "too_big".to_string(),
+            get_item(9001, max_cache_size_in_bytes + 1),
+        );
 
         // Assert that the least recently used item is gone
         assert!(cache.get(&"too_big".to_string()).is_none());
@@ -270,7 +281,10 @@ mod tests {
             MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
         (0..expected_cache_capacity).for_each(|i| {
-            cache.put(i.to_string(), get_item_with_drop_counter(i, item_size_in_bytes, drop_counter.clone()));
+            cache.put(
+                i.to_string(),
+                get_item_with_drop_counter(i, item_size_in_bytes, drop_counter.clone()),
+            );
         });
 
         // Fetch all values and assert nothing has been dropped
@@ -289,9 +303,12 @@ mod tests {
         (0..expected_cache_capacity).for_each(|i| {
             cache.remove(&i.to_string());
         });
-        
+
         // Assert that everything but the captured item was dropped
-        assert_eq!(drop_counter.load(Ordering::SeqCst), expected_cache_capacity-1);
+        assert_eq!(
+            drop_counter.load(Ordering::SeqCst),
+            expected_cache_capacity - 1
+        );
         // Asset that the cache has no reference to the captured item
         assert_eq!(cache.len(), 0);
         let check_item = cache.get(&0.to_string());
@@ -308,7 +325,7 @@ mod tests {
         let max_cache_size_in_bytes = 65536_u64;
         let item_size_in_bytes = 1024_u64;
         let expected_cache_capacity = max_cache_size_in_bytes / item_size_in_bytes;
-        
+
         let cache: MemoryBoundedLruCache<String, DummyData> =
             MemoryBoundedLruCache::new(max_cache_size_in_bytes);
 
@@ -339,11 +356,11 @@ mod tests {
         assert_eq!(cache.evictions.load(Ordering::SeqCst), 1);
 
         // Insert a new item to trigger eviction since cache is full
-        cache.put("new2".to_string(), get_item(9002, item_size_in_bytes));        
+        cache.put("new2".to_string(), get_item(9002, item_size_in_bytes));
 
         // Assert that the least recently used item "2" is gone
         assert_eq!(cache.evictions.load(Ordering::SeqCst), 2);
-        assert!(cache.get(&1.to_string()).is_none());
+        assert!(cache.get(&2.to_string()).is_none());
     }
 
     /// Tests whether threaded access to the cache is working
@@ -359,7 +376,7 @@ mod tests {
         for i in 0..expected_cache_capacity {
             let cache_ref = cache.clone();
             children.push(thread::spawn(move || {
-                cache_ref.to_owned().put(i.to_string(), get_item(i, item_size_in_bytes));
+                cache_ref.put(i.to_string(), get_item(i, item_size_in_bytes));
             }));
         }
 
@@ -376,8 +393,8 @@ mod tests {
         let key = expected_cache_capacity / 2;
         for _ in 0..8192 {
             let cache_ref = cache.clone();
-            children.push(thread::spawn(move || {                
-                let item = cache_ref.to_owned().get(&key.to_string());
+            children.push(thread::spawn(move || {
+                let item = cache_ref.get(&key.to_string());
                 assert!(item.is_some());
                 let item = item.unwrap();
                 assert_eq!(item.id, key);
@@ -396,5 +413,4 @@ mod tests {
         assert!(lru_entry.is_some());
         assert!(lru_entry.unwrap().eq(&key.to_string()));
     }
-
 }
