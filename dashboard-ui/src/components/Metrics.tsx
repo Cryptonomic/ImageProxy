@@ -47,62 +47,51 @@ const Metrics = () => {
     <div className="w-full h-full flex flex-wrap content-start">
       <Block
         title="Uptime"
-        value={find("uptime")?.metrics[0].value}
+        value={(
+          ((Date.now() / 1e3) as number) -
+          find("process_start_time_seconds")?.metrics[0].value
+        ).toFixed(3)}
         units="Seconds"
-        hint={find("uptime")?.help}
+        hint={find("process_start_time_seconds")?.help}
       />
       <Block
-        title="Bytes Sent"
-        value={find("bytes_sent")?.metrics[0].value}
-        units="Bytes"
-        hint={find("bytes_sent")?.help}
-      />
-      <Block
-        title="Bytes Moderated"
+        title="Cache Usage"
         value={find("bytes_sent_mod")?.metrics[0].value}
         units="Bytes"
         hint={find("bytes_sent_mod")?.help}
       />
       <Block
-        title="Bytes Fetched"
+        title="Cache Mem"
+        value={find("process_resident_memory_bytes")?.metrics[0].value}
+        units="Bytes"
+        hint={find("process_resident_memory_bytes")?.help}
+      />
+
+      <Block
+        title="Cached Documents"
         value={find("bytes_fetched")?.metrics[0].value}
         units="Bytes"
         hint={find("bytes_fetched")?.help}
       />
       <Block
-        title="Blocked Requests"
+        title="Total Requests"
         value={find("docs_blocked")?.metrics[0].value}
         hint={find("docs_blocked")?.help}
       />
       <Block
-        title="Fetched Requests"
+        title="Fetch (Docs)"
         value={find("docs_fetched")?.metrics[0].value}
         hint={find("docs_fetched")?.help}
       />
       <Block
-        title="Forced Requests"
+        title="Forced (Docs)"
         value={find("docs_forced")?.metrics[0].value}
         hint={find("docs_forced")?.help}
-      />
-      <Block
-        title="API Hits"
-        value={find("api_fetch")?.metrics[0].value}
-        hint={find("api_fetch")?.help}
       />
       <Block
         title="Errors"
         value={find("errors")?.metrics[0].value}
         hint={find("errors")?.help}
-      />
-      <Block
-        title="Cache Hits"
-        value={find("cache_hit")?.metrics[0].value}
-        hint={find("cache_hit")?.help}
-      />
-      <Block
-        title="Cache Misses"
-        value={find("cache_miss")?.metrics[0].value}
-        hint={find("cache_miss")?.help}
       />
     </div>
   );
