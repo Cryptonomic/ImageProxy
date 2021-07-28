@@ -30,6 +30,7 @@ tokio-postgres = { version="0.7.2", features=["with-chrono-0_4"] }
 async-trait = "0.1.50"
 image = "0.23.14"
 dns-lookup = "1.0.7"
+anyhow = "1.0.42"
 
 [profile.release]
 lto = true

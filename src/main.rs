@@ -8,6 +8,7 @@ pub mod db;
 pub mod dns;
 pub mod document;
 pub mod http;
+pub mod logging;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;
@@ -23,11 +24,12 @@ use hyper::{
 use log::info;
 use tokio::runtime::Builder as TokioBuilder;
 
-use crate::metrics::init_registry;
 use crate::{
     config::Configuration,
+    logging::logging_init,
     proxy::{route, Proxy},
 };
+use crate::{metrics::init_registry, utils::print_banner};
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -47,17 +49,18 @@ pub async fn run(config: &Configuration) -> Result<(), Box<dyn std::error::Error
 
     let addr = ([0, 0, 0, 0], config.port).into();
     let server = Server::bind(&addr).serve(service);
-    info!("Listening on http://{}", addr);
+    info!("Proxy online. Listening on http://{}", addr);
     server.await?;
     Ok(())
 }
 
 fn main() {
-    log4rs::init_file("log4rs.yml", Default::default()).unwrap();
+    print_banner();
+    logging_init();
 
     info!("NFT Image Proxy");
     info!(
-        "Pkg Ver {}, Git Ver {}",
+        "Version:{}, Git:{}",
         built_info::PKG_VERSION,
         built_info::GIT_VERSION.unwrap()
     );
