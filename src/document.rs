@@ -54,7 +54,7 @@ impl Document {
     ) -> Result<Document, Errors> {
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
-        let scale = self.content_length as f64 / max_size as f64;
+        let scale = self.bytes.len() as f64 / max_size as f64;
         let scale_factor: u32 = 2_u32.pow(scale.max(0_f64) as u32);
         debug!("Image resize: scale={}, factor={}", scale, scale_factor);
         let (x_dim_new, y_dim_new) = (x_dim / scale_factor, y_dim / scale_factor);
