@@ -11,12 +11,13 @@ services:
     ports:
       - ${PORT:-3000}:3000
     volumes:
-      - "./proxy.conf:/opt/img_proxy/proxy.conf"
-      - "./log4rs.yml:/opt/img_proxy/log4rs.yml"
+      - "${PROXY_CONFIG_PATH:-./proxy.conf}:/opt/img_proxy/proxy.conf"
+      - "${PROXY_LOG_CONFIG_PATH:-./log4rs.yml}:/opt/img_proxy/log4rs.yml"
       - "sql:/opt/img_proxy/sql"
+      - "${PROXY_LOG_PATH:-./log}:/opt/img_proxy/log"
     depends_on:
       - database
-              
+
   database:
     image: "postgres:13.3"
     environment:
