@@ -15,7 +15,11 @@ pub mod proxy;
 pub mod rpc;
 pub mod utils;
 
-use std::{convert::Infallible, sync::Arc};
+use std::{
+    convert::Infallible,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use hyper::{
     service::{make_service_fn, service_fn},
@@ -47,7 +51,7 @@ pub async fn run(config: &Configuration) -> Result<(), Box<dyn std::error::Error
         }
     });
 
-    let addr = ([0, 0, 0, 0], config.port).into();
+    let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
     let server = Server::bind(&addr).serve(service);
     info!("Proxy online. Listening on http://{}", addr);
     server.await?;
