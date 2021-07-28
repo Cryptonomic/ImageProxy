@@ -19,7 +19,7 @@ appenders:
       kind: compound
       trigger:
         kind: size
-        limit: 1 mb
+        limit: 10 mb
       roller:
         kind: fixed_window
         pattern: log/proxy.{}.log
