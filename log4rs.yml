@@ -4,6 +4,8 @@
 refresh_rate: 30 seconds
 
 appenders:  
+  root_stdout:
+    kind: console    
   stdout:
     kind: console
     filters:
@@ -27,9 +29,9 @@ appenders:
         base: 0
 
 root:
-  level: error
+  level: info
   appenders:
-    - stdout
+    - root_stdout
 
 loggers:
   nft_image_proxy:
