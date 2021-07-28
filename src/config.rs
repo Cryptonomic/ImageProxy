@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
@@ -40,6 +42,7 @@ pub struct ModerationConfig {
 pub struct Configuration {
     pub ipfs: Host,
     pub workers: u16,
+    pub bind_address: Ipv4Addr,
     pub port: u16,
     pub metrics_enabled: bool,
     pub max_document_size: Option<u64>,
