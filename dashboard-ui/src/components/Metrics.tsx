@@ -40,8 +40,19 @@ const Metrics = () => {
   useEffect(() => {
     getMetrics().then((d) => setMetrics(d));
   }, []);
-  const find = (name: string) =>
-    metrics?.find((metric) => metric.name === name);
+  const find = (name: string, arr = metrics, label = "name") =>
+    arr?.find((metric) => metric[label] === name);
+  const findNested = (name: string, labelName: string, label: string) =>
+    find(name)?.metrics.find((elem: any) => elem.labels[labelName] == label);
+
+  const findCache = (name: string) =>
+    findNested("cache_metrics", "metric", name);
+
+  const findApi = (name: string) => {
+    const i = findNested("api_requests", "rpc_method", name);
+    return i ? parseInt(i.value) : 0;
+  };
+
   console.log(metrics);
   return (
     <div className="w-full h-full flex flex-wrap content-start">
@@ -56,37 +67,49 @@ const Metrics = () => {
       />
       <Block
         title="Cache Usage"
-        value={find("bytes_sent_mod")?.metrics[0].value}
-        units="Bytes"
-        hint={find("bytes_sent_mod")?.help}
+        value={(
+          findCache("mem_used_bytes")?.value /
+          findCache("mem_total_bytes")?.value
+        )
+          .toFixed(3)
+          .toString()}
+        units="%"
+        hint={"Percentage of cache memory used"}
       />
       <Block
         title="Cache Mem"
-        value={find("process_resident_memory_bytes")?.metrics[0].value}
-        units="Bytes"
-        hint={find("process_resident_memory_bytes")?.help}
+        value={(findCache("mem_total_bytes")?.value / 1e6)
+          .toFixed(3)
+          .toString()}
+        units="Mb"
+        hint={"Total cache memory"}
       />
 
       <Block
         title="Cached Documents"
-        value={find("bytes_fetched")?.metrics[0].value}
-        units="Bytes"
-        hint={find("bytes_fetched")?.help}
+        value={findCache("items")?.value}
+        units="Items"
+        hint={"Number of items in cache"}
       />
       <Block
         title="Total Requests"
-        value={find("docs_blocked")?.metrics[0].value}
-        hint={find("docs_blocked")?.help}
+        value={(
+          findApi("img_proxy_fetch") +
+          findApi("img_proxy_describe") +
+          findApi("img_proxy_report") +
+          findApi("img_proxy_describe_report")
+        ).toString()}
+        hint={"Total number of requests made"}
       />
       <Block
-        title="Fetch (Docs)"
-        value={find("docs_fetched")?.metrics[0].value}
-        hint={find("docs_fetched")?.help}
+        title="Fetched (Docs)"
+        value={findNested("document", "status", "fetched")?.value}
+        hint={"Number of unforced fetches"}
       />
       <Block
         title="Forced (Docs)"
-        value={find("docs_forced")?.metrics[0].value}
-        hint={find("docs_forced")?.help}
+        value={findNested("document", "status", "forced")?.value}
+        hint={"Number of forced fetches"}
       />
       <Block
         title="Errors"
