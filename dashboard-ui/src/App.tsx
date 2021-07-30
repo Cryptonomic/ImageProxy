@@ -8,22 +8,14 @@ function App() {
   return (
     <div className="flex flex-col h-full w-full bg-background">
       <Navbar />
-      <Dashboard
-        names={[
-          "Metrics",
-          "User Reports",
-          "Moderation Reports",
-          "Configuration",
-        ]}
-      >
-        <Panel>
+      <Dashboard>
+        <Panel name="Metrics">
           <Info />
           <Metrics />
         </Panel>
-
-        <Panel disabled />
-        <Panel disabled />
-        <Panel disabled />
+        <Panel name="User Reports" disabled />
+        <Panel name="Moderation Reports" disabled />
+        <Panel name="Configuration" disabled />
       </Dashboard>
     </div>
   );
