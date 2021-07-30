@@ -32,7 +32,7 @@ impl Methods {
     async fn fetch_document(
         proxy: Arc<Proxy>,
         req_id: &Uuid,
-        url: &String,
+        url: &str,
     ) -> Result<Arc<Document>, Errors> {
         if let Some(cache) = &proxy.cache {
             let cache_key = sha512(url.as_bytes());
@@ -65,11 +65,11 @@ impl Methods {
         if params.force {
             metrics::DOCUMENT.with_label_values(&["forced"]).inc();
 
-            let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
-            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
+            let document_type = SupportedMimeTypes::from_string(&document.content_type);
 
             if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+                return Ok(Errors::UnsupportedImageType.to_response(req_id));
             }
             metrics::TRAFFIC
                 .with_label_values(&["served"])
@@ -96,9 +96,9 @@ impl Methods {
                 error!("Error querying database for id={}, reason={}", req_id, e);
                 e
             })
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
 
-        if cached_results.len() > 0 {
+        if !cached_results.is_empty() {
             if cached_results.len() > 1 {
                 warn!("Found more than one cache results for id={}", req_id);
             }
@@ -118,7 +118,7 @@ impl Methods {
                     req_id,
                 ))
             } else {
-                let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
+                let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
                 metrics::TRAFFIC
                     .with_label_values(&["served"])
                     .inc_by(document.bytes.len() as u64);
@@ -138,11 +138,11 @@ impl Methods {
             info!("No cached results found for id={}", req_id);
 
             // Moderate and update the db
-            let document = Methods::fetch_document(proxy.clone(), &req_id, &params.url).await?;
+            let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
 
-            let document_type = SupportedMimeTypes::from_str(&document.content_type);
+            let document_type = SupportedMimeTypes::from_string(&document.content_type);
             if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id.clone()));
+                return Ok(Errors::UnsupportedImageType.to_response(req_id));
             }
 
             let max_document_size = proxy.moderation_provider.max_document_size();
@@ -151,7 +151,7 @@ impl Methods {
             metrics::MODERATION.with_label_values(&["requests"]).inc();
 
             // Resize the image if required or reformat to png if required
-            let formatted: Result<ModerationResponse, Errors> = if document.content_length
+            let formatted: Result<ModerationResponse, Errors> = if document.bytes.len() as u64
                 >= max_document_size
                 || !supported_types.contains(&document_type)
             {
@@ -167,7 +167,7 @@ impl Methods {
 
             match formatted {
                 Ok(mr) => {
-                    let blocked = mr.categories.len() > 0;
+                    let blocked = !mr.categories.is_empty();
                     match proxy
                         .database
                         .add_moderation_result(&params.url, mr.provider, blocked, &mr.categories)
@@ -204,7 +204,7 @@ impl Methods {
                         }
                     }
                 }
-                Err(e) => return Ok(e.to_response(req_id.clone())),
+                Err(e) => Ok(e.to_response(req_id)),
             }
         }
     }
@@ -218,20 +218,11 @@ impl Methods {
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
         );
-
-        let is_wildcard = "*" == params.urls.get(0).unwrap_or(&String::from(""));
-        let from_db = match is_wildcard {
-            true => proxy.database.get_all_moderation_result().await,
-            _ => proxy.database.get_moderation_result(&params.urls).await,
-        };
-        match from_db {
+        match proxy.database.get_moderation_result(&params.urls).await {
             Ok(results) => {
                 info!("Fetched results for id={}, rows={}", req_id, results.len());
-                let urls = match is_wildcard {
-                    true => results.iter().map(|r| r.url.clone()).collect(),
-                    _ => params.urls.clone(),
-                };
-                let describe_results: Vec<DescribeResult> = urls
+                let describe_results: Vec<DescribeResult> = params
+                    .urls
                     .iter()
                     .map(|url| match results.iter().find(|r| r.url.eq(url)) {
                         Some(res) => {
@@ -242,7 +233,7 @@ impl Methods {
                             };
                             DescribeResult {
                                 url: url.clone(),
-                                status: status,
+                                status,
                                 categories: res.categories.clone(),
                                 provider: res.provider.clone(),
                             }

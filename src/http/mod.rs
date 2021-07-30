@@ -35,7 +35,7 @@ impl HttpClient {
         let https = HttpsConnector::new();
         let client = Client::builder().build(https);
         assert!(
-            uri_filters.len() > 0,
+            !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
         HttpClient {
@@ -46,7 +46,7 @@ impl HttpClient {
         }
     }
 
-    fn to_uri(ipfs_config: &Host, url: &String) -> Result<Uri, Errors> {
+    fn to_uri(ipfs_config: &Host, url: &str) -> Result<Uri, Errors> {
         let uri = url.parse::<Uri>().map_err(|e| {
             error!("Error parsing url={}, reason={}", url, e);
             Errors::InvalidUri
@@ -55,11 +55,14 @@ impl HttpClient {
         match uri.scheme() {
             Some(s) if s.eq(&Scheme::HTTP) | s.eq(&Scheme::HTTPS) => Ok(uri),
             Some(s) if s.to_string().eq_ignore_ascii_case("ipfs") => {
-                match url.strip_prefix("ipfs://").or(url.strip_prefix("IPFS://")) {
+                match url
+                    .strip_prefix("ipfs://")
+                    .or_else(|| url.strip_prefix("IPFS://"))
+                {
                     Some(ipfs_path) => {
                         let ipfs_path_prefix = ipfs_config
                             .path
-                            .strip_prefix("/")
+                            .strip_prefix('/')
                             .unwrap_or(&ipfs_config.path);
                         let gateway_url = format!(
                             "{}://{}:{}/{}/{}",
@@ -82,9 +85,9 @@ impl HttpClient {
         }
     }
 
-    pub async fn fetch(&self, req_id: &Uuid, url: &String) -> Result<Document, Errors> {
+    pub async fn fetch(&self, req_id: &Uuid, url: &str) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
-        let uri = HttpClient::to_uri(&self.ipfs_config, url)?;
+        let uri = HttpClient::to_uri(&self.ipfs_config, &url.to_string())?;
 
         let filter_results = self
             .uri_filters
@@ -111,7 +114,7 @@ impl HttpClient {
                             .get(hyper::header::CONTENT_TYPE)
                             .map(|h| String::from_utf8(h.as_bytes().to_vec()).ok())
                             .flatten()
-                            .unwrap_or("".to_string());
+                            .unwrap_or_default();
                         let bytes = to_bytes(response.into_body()).await.map_err(|e| {
                             error!("Error retrieving document body, reason={}", e);
                             Errors::FetchFailed
@@ -130,11 +133,11 @@ impl HttpClient {
                             .observe(bytes.len() as f64);
 
                         Ok(Document {
-                            id: req_id.clone(),
-                            content_type: content_type,
-                            content_length: content_length,
-                            bytes: bytes,
-                            url: url.clone(),
+                            id: *req_id,
+                            content_type,
+                            content_length,
+                            bytes,
+                            url: url.to_string(),
                         })
                     }
                     hyper::StatusCode::NOT_FOUND => {

@@ -15,9 +15,9 @@ pub trait Cache<K, V>
 where
     K: 'static + Hash + Eq + Clone,
 {
-    fn put(&self, key: K, value: Arc<V>);
+    fn put(&self, key: K, value: Arc<V>) -> bool;
     fn get(&self, key: &K) -> Option<Arc<V>>;
-    fn remove(&self, key: &K);
+    fn remove(&self, key: &K) -> Option<Arc<V>>;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn clear(&self);
@@ -58,7 +58,7 @@ pub struct CacheConfig {
 }
 
 /// Factory method for cache
-pub fn get_cache<K, V>(config: &CacheConfig) -> Option<Arc<Box<dyn Cache<K, V> + Send + Sync>>>
+pub fn get_cache<K, V>(config: &CacheConfig) -> Option<Box<dyn Cache<K, V> + Send + Sync>>
 where
     K: 'static + Hash + Eq + Clone + Send + Sync,
     V: 'static + ByteSizeable + Send + Sync,
@@ -68,7 +68,7 @@ where
             let cache = MemoryBoundedLruCache::new(
                 config.memory_cache_config.max_cache_size_mb * 1024 * 1024,
             );
-            Some(Arc::new(Box::new(cache)))
+            Some(Box::new(cache))
         }
         CacheType::DiskCache => {
             error!("Cache type:{:?} not supported yet", config.cache_type);

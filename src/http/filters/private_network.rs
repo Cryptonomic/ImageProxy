@@ -10,11 +10,8 @@ pub struct PrivateNetworkFilter {
 }
 
 impl PrivateNetworkFilter {
-    pub fn new(
-        dns_resolver: Box<dyn DnsResolver + Send + Sync>,
-    ) -> Box<dyn UriFilter + Send + Sync> {
-        let filter = PrivateNetworkFilter { dns_resolver };
-        Box::new(filter)
+    pub fn new(dns_resolver: Box<dyn DnsResolver + Send + Sync>) -> PrivateNetworkFilter {
+        PrivateNetworkFilter { dns_resolver }
     }
 }
 
@@ -25,7 +22,7 @@ impl UriFilter for PrivateNetworkFilter {
                 Ok(ips) => {
                     debug!("Dns resolution, host:{}, ips:{:?}", host, ips);
                     ips.iter()
-                        .fold(ips.len() > 0, |acc, ip| acc & ip.is_global())
+                        .fold(!ips.is_empty(), |acc, ip| acc & ip.is_global())
                 }
                 Err(e) => {
                     error!("DNS resolution error for host={}, reason={}", host, e);
@@ -52,12 +49,12 @@ mod tests {
     fn test_block_private_1() {
         let private_ip: IpAddr = "10.0.0.2".parse().unwrap();
         let dns_resolver = DummyDnsResolver {
-            resolved_address: vec![private_ip.clone()],
+            resolved_address: vec![private_ip],
         };
 
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let private_uri = "http://localhost:8080/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&private_uri), false);
+        assert!(!filter.filter(&private_uri));
     }
 
     #[test]
@@ -65,18 +62,18 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let private_uri = "http://localhost:8080/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&private_uri), false);
+        assert!(!filter.filter(&private_uri));
     }
 
     #[test]
     fn test_allow_global() {
         let global_ip1: IpAddr = "8.8.8.8".parse().unwrap();
         let resolver2 = DummyDnsResolver {
-            resolved_address: vec![global_ip1.clone()],
+            resolved_address: vec![global_ip1],
         };
         let filter = PrivateNetworkFilter::new(Box::new(resolver2));
         let global_uri = "https://www.google.com/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&global_uri), true);
+        assert!(filter.filter(&global_uri));
     }
 
     #[test]
@@ -84,11 +81,11 @@ mod tests {
         let private_ip1: IpAddr = "172.16.10.14".parse().unwrap();
         let global_ip1: IpAddr = "8.8.8.8".parse().unwrap();
         let dns_resolver = DummyDnsResolver {
-            resolved_address: vec![global_ip1.clone(), private_ip1.clone()],
+            resolved_address: vec![global_ip1, private_ip1],
         };
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://www.google.com/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&global_uri), false);
+        assert!(!filter.filter(&global_uri));
     }
 
     #[test]
@@ -96,7 +93,7 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://169.254.10.254/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&global_uri), false);
+        assert!(!filter.filter(&global_uri));
     }
 
     #[test]
@@ -104,6 +101,6 @@ mod tests {
         let dns_resolver = StandardDnsResolver {};
         let filter = PrivateNetworkFilter::new(Box::new(dns_resolver));
         let global_uri = "https://255.255.255.255/image.png".parse().unwrap();
-        assert_eq!(filter.filter(&global_uri), false);
+        assert!(!filter.filter(&global_uri));
     }
 }

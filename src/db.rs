@@ -1,7 +1,11 @@
 extern crate crypto;
 use std::time::Duration;
 
-use crate::{Configuration, moderation::{ModerationCategories, ModerationService}, utils::sha512};
+use crate::{
+    config::DatabaseConfig,
+    moderation::{ModerationCategories, ModerationService},
+    utils::sha512,
+};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
@@ -33,10 +37,10 @@ pub struct ReportRow {
 }
 
 impl Database {
-    pub async fn new(conf: &Configuration) -> Result<Database> {
+    pub async fn new(config: &DatabaseConfig) -> Result<Database> {
         let connection_string = format!(
             "postgresql://{}:{}@{}:{}",
-            conf.database.username, conf.database.password, conf.database.host, conf.database.port
+            config.username, config.password, config.host, config.port
         );
         let pg_mgr = PostgresConnectionManager::new_from_stringlike(
             connection_string,
@@ -46,9 +50,9 @@ impl Database {
 
         Ok(Database {
             pool: Pool::builder()
-                .connection_timeout(Duration::new(30, 0))
-                .min_idle(Some(2))
-                .max_size(16)
+                .connection_timeout(Duration::new(config.pool_connection_timeout, 0))
+                .min_idle(Some(config.pool_idle_connections))
+                .max_size(config.pool_max_connections)
                 .build(pg_mgr)
                 .await
                 .unwrap(),
@@ -59,12 +63,13 @@ impl Database {
         &self,
         id: &Uuid,
         url: &str,
-        categories: &Vec<ModerationCategories>,
+        categories: &[ModerationCategories],
     ) -> Result<()> {
         let id = id.to_string();
         let url_hash = sha512(url.as_bytes());
         let timestamp = chrono::Utc::now();
-        let cat_str = serde_json::to_string(categories).unwrap_or(String::from("json_error"));
+        let cat_str =
+            serde_json::to_string(categories).unwrap_or_else(|_| String::from("json_error"));
         let conn = self.pool.get().await?;
         conn.execute(
             "INSERT INTO report (id, url, categories, url_hash, updated_at)
@@ -89,14 +94,14 @@ impl Database {
                 let categories: &str = r.get("categories");
                 let id: &str = r.get("id");
                 let url: &str = r.get("url");
-                let categories = serde_json::from_str::<Vec<ModerationCategories>>(&categories)
-                    .unwrap_or(Vec::new());
+                let categories = serde_json::from_str::<Vec<ModerationCategories>>(categories)
+                    .unwrap_or_default();
                 let updated_at: DateTime<Utc> = r.get("updated_at");
                 ReportRow {
                     id: String::from(id),
                     url: String::from(url),
-                    categories: categories,
-                    updated_at: updated_at,
+                    categories,
+                    updated_at,
                 }
             })
             .collect())
@@ -107,12 +112,14 @@ impl Database {
         url: &str,
         provider: ModerationService,
         blocked: bool,
-        categories: &Vec<ModerationCategories>,
+        categories: &[ModerationCategories],
     ) -> Result<()> {
         let url_hash = sha512(url.as_bytes());
         let timestamp = chrono::Utc::now();
-        let cat_str = serde_json::to_string(categories).unwrap_or(String::from("json_error"));
-        let provider_str = serde_json::to_string(&provider).unwrap_or(String::from("json_error"));
+        let cat_str =
+            serde_json::to_string(categories).unwrap_or_else(|_| String::from("json_error"));
+        let provider_str =
+            serde_json::to_string(&provider).unwrap_or_else(|_| String::from("json_error"));
         let conn = self.pool.get().await?;
         conn.execute(
             "UPDATE documents
@@ -132,13 +139,15 @@ impl Database {
         url: &str,
         provider: ModerationService,
         blocked: bool,
-        categories: &Vec<ModerationCategories>,
+        categories: &[ModerationCategories],
     ) -> Result<()> {
         let url_hash = sha512(url.as_bytes());
         let doc_hash = ""; //FIXME
         let timestamp = chrono::Utc::now();
-        let provider_str = serde_json::to_string(&provider).unwrap_or(String::from("json_error"));
-        let cat_str = serde_json::to_string(categories).unwrap_or(String::from("json_error"));
+        let provider_str =
+            serde_json::to_string(&provider).unwrap_or_else(|_| String::from("json_error"));
+        let cat_str =
+            serde_json::to_string(categories).unwrap_or_else(|_| String::from("json_error"));
         let conn = self.pool.get().await?;
         conn.execute("INSERT INTO documents (url_hash, url, blocked, provider, categories, doc_hash, updated_at)
         VALUES($1, $2, $3, $4, $5, $6, $7) 
@@ -147,7 +156,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_moderation_result(&self, url: &Vec<String>) -> Result<Vec<DocumentCacheRow>> {
+    pub async fn get_moderation_result(&self, url: &[String]) -> Result<Vec<DocumentCacheRow>> {
         let url_hashes: Vec<String> = url.iter().map(|u| sha512(u.as_bytes())).collect();
         let conn = self.pool.get().await?;
         let results = conn
@@ -159,7 +168,7 @@ impl Database {
             .await?;
 
         debug!("Retrieved {} rows.", results.len());
-        if results.len() == 0 {
+        if results.is_empty() {
             return Ok(Vec::new());
         }
 
@@ -171,50 +180,14 @@ impl Database {
                 let provider: &str = r.get("provider");
                 let url: &str = r.get("url");
 
-                let categories = serde_json::from_str::<Vec<ModerationCategories>>(&categories)
-                    .unwrap_or(Vec::new());
-                let provider = serde_json::from_str::<ModerationService>(&provider)
+                let categories = serde_json::from_str::<Vec<ModerationCategories>>(categories)
+                    .unwrap_or_default();
+                let provider = serde_json::from_str::<ModerationService>(provider)
                     .unwrap_or(ModerationService::Unknown);
                 DocumentCacheRow {
                     blocked,
-                    categories: categories.clone(),
-                    provider: provider,
-                    url: String::from(url),
-                }
-            })
-            .collect())
-    }
-
-    pub async fn get_all_moderation_result(&self) -> Result<Vec<DocumentCacheRow>> {
-        let conn = self.pool.get().await?;
-        let results = conn
-            .query(
-                "SELECT blocked, categories, provider, url from documents;",
-                &[],
-            )
-            .await?;
-
-        debug!("Retrieved {} rows.", results.len());
-        if results.len() == 0 {
-            return Ok(Vec::new());
-        }
-
-        Ok(results
-            .iter()
-            .map(|r| {
-                let blocked: bool = r.get("blocked");
-                let categories: &str = r.get("categories");
-                let provider: &str = r.get("provider");
-                let url: &str = r.get("url");
-
-                let categories = serde_json::from_str::<Vec<ModerationCategories>>(&categories)
-                    .unwrap_or(Vec::new());
-                let provider = serde_json::from_str::<ModerationService>(&provider)
-                    .unwrap_or(ModerationService::Unknown);
-                DocumentCacheRow {
-                    blocked,
-                    categories: categories.clone(),
-                    provider: provider,
+                    categories,
+                    provider,
                     url: String::from(url),
                 }
             })

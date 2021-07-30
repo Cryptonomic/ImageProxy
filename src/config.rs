@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
@@ -13,12 +15,15 @@ pub struct Host {
 }
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
-pub struct Database {
+pub struct DatabaseConfig {
     pub host: String,
     pub port: u16,
     pub username: String,
     pub password: String,
     pub db: String,
+    pub pool_max_connections: u32,
+    pub pool_idle_connections: u32,
+    pub pool_connection_timeout: u64,
 }
 #[derive(Deserialize, Clone)]
 pub struct AwsConfig {
@@ -37,11 +42,12 @@ pub struct ModerationConfig {
 pub struct Configuration {
     pub ipfs: Host,
     pub workers: u16,
+    pub bind_address: Ipv4Addr,
     pub port: u16,
     pub metrics_enabled: bool,
     pub max_document_size: Option<u64>,
     pub api_keys: Vec<String>,
-    pub database: Database,
+    pub database: DatabaseConfig,
     pub moderation: ModerationConfig,
     pub cache_config: CacheConfig,
 }
