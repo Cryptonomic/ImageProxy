@@ -7,6 +7,21 @@ use prometheus::{
 };
 
 lazy_static! {
+    static ref API_RESPONSE_TIME_BUCKETS: Vec<f64> =
+        vec![5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2000.0, 5000.0,];
+    static ref DOCUMENT_SIZE_BUCKETS: Vec<f64> = vec![
+        25.0 * 1024_f64,
+        50.0 * 1024_f64,
+        100.0 * 1024_f64,
+        250.0 * 1024_f64,
+        500.0 * 1024_f64,
+        1000.0 * 1024_f64,
+        2000.0 * 1024_f64,
+        5000.0 * 1024_f64,
+        10000.0 * 1024_f64,
+        25000.0 * 1024_f64,
+        50000.0 * 1024_f64,
+    ];
     pub static ref REGISTRY: Registry = Registry::new();
     pub static ref ACTIVE_CLIENTS: IntGauge =
         IntGauge::new("active_clients", "Active clients").unwrap();
@@ -23,7 +38,8 @@ lazy_static! {
     )
     .unwrap();
     pub static ref API_RESPONSE_TIME: HistogramVec = HistogramVec::new(
-        HistogramOpts::new("api_response_time", "Api Response Time in milliseconds"),
+        HistogramOpts::new("api_response_time", "Api Response Time in milliseconds")
+            .buckets(API_RESPONSE_TIME_BUCKETS.clone()),
         &["method"]
     )
     .unwrap();
@@ -37,7 +53,7 @@ lazy_static! {
     pub static ref MODERATION: IntCounterVec =
         IntCounterVec::new(Opts::new("moderation", "Moderation stats"), &["metric"]).unwrap();
     pub static ref DOCUMENT_SIZE: HistogramVec = HistogramVec::new(
-        HistogramOpts::new("doc_size", "Document Size"),
+        HistogramOpts::new("doc_size", "Document Size").buckets(DOCUMENT_SIZE_BUCKETS.clone()),
         &["size_bytes"]
     )
     .unwrap();
