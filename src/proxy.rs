@@ -130,6 +130,7 @@ async fn info() -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .body(Body::from(result))
         .unwrap_or_default())
 }
@@ -152,7 +153,15 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
 
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
-    Ok(Response::new(Body::from(output.unwrap_or_default())))
+    Ok(Response::builder()
+        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(Body::from(output.unwrap_or(String::default())))
+        .unwrap_or(
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(String::default().into())
+                .unwrap_or_default(),
+        ))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {

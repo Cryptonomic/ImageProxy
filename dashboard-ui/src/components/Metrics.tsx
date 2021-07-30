@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getMetrics } from "../utils/ImageProxy";
 import info from "../images/information.png";
+import LineGraph from "./LineGraph";
 
 const Block: React.FC<{
   title: string;
