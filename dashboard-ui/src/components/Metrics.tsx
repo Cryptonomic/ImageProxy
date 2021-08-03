@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
-import { getMetrics } from "../utils/ImageProxy";
+import useInterval from "react-useinterval";
+import {
+  getMetrics,
+  findMetric,
+  findNestedMetric,
+  findApiMetrics,
+  findCacheMetrics,
+  findApiResponseTimeMetrics,
+} from "../utils/ImageProxy";
 import info from "../images/information.png";
 import LineGraph from "./LineGraph";
+import BarChart from "./BarChart";
 
 const Block: React.FC<{
   title: string;
@@ -10,6 +19,7 @@ const Block: React.FC<{
   hint?: string;
 }> = ({ title, value, hint, units }) => {
   const [showToolTip, setShowing] = useState(false);
+
   return (
     <div className="relative h-44 w-1/6 min-w-min m-4 p-4 flex flex-col bg-background-dark rounded-lg transform transition hover:scale-95 ">
       {hint && (
@@ -38,21 +48,33 @@ const Block: React.FC<{
 
 const Metrics = () => {
   const [metrics, setMetrics] = useState<any[]>();
-  useEffect(() => {
-    getMetrics().then((d) => setMetrics(d));
-  }, []);
-  const find = (name: string, arr = metrics, label = "name") =>
-    arr?.find((metric) => metric[label] === name);
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [reqsPerSec, setReqsPerSec] = useState(new Array(60).fill([0, 0]));
+  const find = (name: string) => findMetric(metrics, name);
   const findNested = (name: string, labelName: string, label: string) =>
-    find(name)?.metrics.find((elem: any) => elem.labels[labelName] == label);
+    findNestedMetric(metrics, name, labelName, label);
+  const findCache = (name: string) => findCacheMetrics(metrics, name);
+  const findApi = (name: string) => findApiMetrics(metrics, name);
 
-  const findCache = (name: string) =>
-    findNested("cache_metrics", "metric", name);
+  useInterval(() => {
+    getMetrics().then((d) => {
+      setMetrics(d);
+      let curr =
+        findApiMetrics(d, "img_proxy_fetch") +
+        findApiMetrics(d, "img_proxy_describe") +
+        findApiMetrics(d, "img_proxy_report") +
+        findApiMetrics(d, "img_proxy_describe_report");
 
-  const findApi = (name: string) => {
-    const i = findNested("api_requests", "rpc_method", name);
-    return i ? parseInt(i.value) : 0;
-  };
+      console.log(reqsPerSec);
+      if (totalRequests !== 0) {
+        reqsPerSec.shift();
+        reqsPerSec.push([Date.now(), (curr - totalRequests) / 5]);
+        setReqsPerSec(reqsPerSec);
+        console.log(curr, totalRequests);
+      }
+      setTotalRequests(curr);
+    });
+  }, 5000);
 
   console.log(metrics);
   return (
@@ -69,8 +91,9 @@ const Metrics = () => {
       <Block
         title="Cache Usage"
         value={(
-          findCache("mem_used_bytes")?.value /
-          findCache("mem_total_bytes")?.value
+          (findCache("mem_used_bytes")?.value /
+            findCache("mem_total_bytes")?.value) *
+          100
         )
           .toFixed(3)
           .toString()}
@@ -94,28 +117,36 @@ const Metrics = () => {
       />
       <Block
         title="Total Requests"
-        value={(
-          findApi("img_proxy_fetch") +
-          findApi("img_proxy_describe") +
-          findApi("img_proxy_report") +
-          findApi("img_proxy_describe_report")
-        ).toString()}
+        value={totalRequests.toString()}
         hint={"Total number of requests made"}
       />
       <Block
         title="Fetched (Docs)"
-        value={findNested("document", "status", "fetched")?.value}
+        value={findNested("document", "status", "fetched")?.value || 0}
         hint={"Number of unforced fetches"}
       />
       <Block
         title="Forced (Docs)"
-        value={findNested("document", "status", "forced")?.value}
+        value={findNested("document", "status", "forced")?.value || 0}
         hint={"Number of forced fetches"}
       />
       <Block
         title="Errors"
         value={find("errors")?.metrics[0].value}
         hint={find("errors")?.help}
+      />
+
+      <BarChart
+        title={find("api_response_time")?.help}
+        width={500}
+        height={200}
+        data={metrics ? findApiResponseTimeMetrics(metrics) : []}
+      />
+      <LineGraph
+        title="Requests Per Second"
+        width={500}
+        height={200}
+        data={reqsPerSec}
       />
     </div>
   );
