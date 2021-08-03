@@ -3,8 +3,14 @@ use log::error;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::error::{Errors, RpcError};
-use crate::moderation::{ModerationCategories, ModerationService};
+use super::{
+    error::{Errors, RpcError},
+    requests::ResponseType,
+};
+use crate::{
+    document::Document,
+    moderation::{ModerationCategories, ModerationService},
+};
 
 use super::VERSION;
 
@@ -104,31 +110,47 @@ pub struct ServerError {
 
 impl FetchResponse {
     pub fn to_response(
+        response_type: &ResponseType,
+        document: Option<&Document>,
         rpc_status: RpcStatus,
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
-        data: Option<String>,
         req_id: &Uuid,
     ) -> Response<Body> {
-        let result = FetchResponse {
-            jsonrpc: String::from(VERSION),
-            rpc_status,
-            result: ModerationResult {
-                moderation_status,
-                categories,
-                data: data.unwrap_or_default(),
-            },
-        };
+        match response_type {
+            ResponseType::Raw => document.map_or_else(
+                || Errors::InternalError.to_response(req_id),
+                |doc| {
+                    Response::builder()
+                        .status(200)
+                        .header(hyper::header::CONTENT_TYPE, doc.content_type.clone())
+                        .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
+                        .body(Body::from(doc.bytes.clone()))
+                        .unwrap_or_default()
+                },
+            ),
+            ResponseType::Json => {
+                let result = FetchResponse {
+                    jsonrpc: String::from(VERSION),
+                    rpc_status,
+                    result: ModerationResult {
+                        moderation_status,
+                        categories,
+                        data: document.map(|doc| doc.to_url()).unwrap_or_default(),
+                    },
+                };
 
-        match serde_json::to_string_pretty(&result) {
-            Ok(body) => Response::builder()
-                .status(hyper::StatusCode::OK)
-                .header(hyper::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body))
-                .unwrap_or_default(),
-            Err(e) => {
-                error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id)
+                match serde_json::to_string_pretty(&result) {
+                    Ok(body) => Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .header(hyper::header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(body))
+                        .unwrap_or_default(),
+                    Err(e) => {
+                        error!("Error serializing fetch response, reason={}", e);
+                        Errors::InternalError.to_response(req_id)
+                    }
+                }
             }
         }
     }

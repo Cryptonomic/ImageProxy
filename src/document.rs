@@ -8,7 +8,7 @@ use crate::moderation::SupportedMimeTypes;
 use crate::rpc::error::Errors;
 
 use base64::encode;
-use hyper::{body::Bytes, Body, Response};
+use hyper::body::Bytes;
 
 use image::DynamicImage;
 use image::ImageFormat;
@@ -77,15 +77,6 @@ impl Document {
                 Err(Errors::InternalError)
             }
         }
-    }
-
-    pub fn to_response(&self) -> Response<Body> {
-        Response::builder()
-            .status(200)
-            .header(hyper::header::CONTENT_TYPE, self.content_type.clone())
-            .header(hyper::header::CONTENT_LENGTH, self.bytes.len())
-            .body(Body::from(self.bytes.clone()))
-            .unwrap_or_default()
     }
 
     pub fn to_url(&self) -> String {

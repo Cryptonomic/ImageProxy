@@ -74,16 +74,14 @@ impl Methods {
             metrics::TRAFFIC
                 .with_label_values(&["served"])
                 .inc_by(document.bytes.len() as u64);
-            return match &params.response_type {
-                ResponseType::Raw => Ok(document.to_response()),
-                ResponseType::Json => Ok(FetchResponse::to_response(
-                    RpcStatus::Ok,
-                    ModerationStatus::Allowed,
-                    Vec::new(),
-                    Some(document.to_url()),
-                    req_id,
-                )),
-            };
+            return Ok(FetchResponse::to_response(
+                &params.response_type,
+                Some(&document),
+                RpcStatus::Ok,
+                ModerationStatus::Allowed,
+                Vec::new(),
+                req_id,
+            ));
         }
 
         let urls = vec![params.url.clone()];
@@ -111,10 +109,11 @@ impl Methods {
             // Send an appropriate response if moderation indicates content is blocked
             if r.blocked {
                 Ok(FetchResponse::to_response(
+                    &ResponseType::Json,
+                    None,
                     RpcStatus::Ok,
                     ModerationStatus::Blocked,
                     r.categories.clone(),
-                    None,
                     req_id,
                 ))
             } else {
@@ -122,16 +121,14 @@ impl Methods {
                 metrics::TRAFFIC
                     .with_label_values(&["served"])
                     .inc_by(document.bytes.len() as u64);
-                match params.response_type {
-                    ResponseType::Raw => Ok(document.to_response()),
-                    ResponseType::Json => Ok(FetchResponse::to_response(
-                        RpcStatus::Ok,
-                        ModerationStatus::Allowed,
-                        Vec::new(),
-                        Some(document.to_url()),
-                        req_id,
-                    )),
-                }
+                Ok(FetchResponse::to_response(
+                    &params.response_type,
+                    Some(&document),
+                    RpcStatus::Ok,
+                    ModerationStatus::Allowed,
+                    Vec::new(),
+                    req_id,
+                ))
             }
         } else {
             metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
@@ -182,26 +179,26 @@ impl Methods {
                     if blocked {
                         metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
                         Ok(FetchResponse::to_response(
+                            &ResponseType::Json,
+                            None,
                             RpcStatus::Ok,
                             ModerationStatus::Blocked,
                             mr.categories.clone(),
-                            None,
                             req_id,
                         ))
                     } else {
                         metrics::TRAFFIC
                             .with_label_values(&["served"])
                             .inc_by(document.bytes.len() as u64);
-                        match params.response_type {
-                            ResponseType::Raw => Ok(document.to_response()),
-                            ResponseType::Json => Ok(FetchResponse::to_response(
-                                RpcStatus::Ok,
-                                ModerationStatus::Allowed,
-                                Vec::new(),
-                                Some(document.to_url()),
-                                req_id,
-                            )),
-                        }
+
+                        Ok(FetchResponse::to_response(
+                            &params.response_type,
+                            Some(&document),
+                            RpcStatus::Ok,
+                            ModerationStatus::Allowed,
+                            Vec::new(),
+                            req_id,
+                        ))
                     }
                 }
                 Err(e) => Ok(e.to_response(req_id)),
