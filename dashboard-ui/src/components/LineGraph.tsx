@@ -9,8 +9,6 @@ import {
   timeFormat,
   axisBottom,
   axisLeft,
-  timeFormatLocale,
-  format,
 } from "d3";
 
 interface Props {
@@ -18,6 +16,8 @@ interface Props {
   className?: string;
   width: number;
   height: number;
+  xAxisLabel?: string;
+  yAxisLabel?: string;  
   data: { label: string; color: string; coords: [number, number][] }[];
 }
 
@@ -27,6 +27,8 @@ const LineGraph: React.FC<Props> = ({
   title,
   data,
   className,
+  xAxisLabel,
+  yAxisLabel
 }) => {
   const plotMarginLeft = 40;
   const plotMarginRight = -20;
@@ -53,7 +55,7 @@ const LineGraph: React.FC<Props> = ({
       .tickSize(-plotHeight)
       .tickPadding(10)
       .tickFormat(((d: Date, i) =>
-        i % 2 == 0 ? timeFormat("%H:%M")(d) : "") as (
+        i % 2 === 0 ? timeFormat("%H:%M")(d) : "") as (
         value: Date | { valueOf(): number },
         i: number
       ) => string);
@@ -83,35 +85,38 @@ const LineGraph: React.FC<Props> = ({
         .attr("width", "20")
         .attr("height", "3")
         .attr("fill", color);
-    });
-    if (!svg.select(".x-axis").node() && data.length !== 0) {
-      svg
-        .append("g")
-        .attr("transform", `translate(0,${plotHeight})`)
-        .classed("x-axis", true)
-        .call(xAxis);
-    } else {
-      svg.select(".x-axis").remove();
-      svg
-        .append("g")
-        .attr("transform", `translate(0,${plotHeight})`)
-        .classed("x-axis", true)
-        .call(xAxis);
+    });    
+    const addXAxis = () => svg
+      .append("g")
+      .attr("transform", `translate(0,${plotHeight})`)
+      .classed("x-axis", true)
+      .call(xAxis)
+      .append("text")
+      .text(xAxisLabel ? xAxisLabel : "")
+      .attr("transform", `translate(${plotWidth/2},${plotMarginBottom + 20})`)        
+      .attr("fill", "black");
+    const addYAxis = () => svg
+      .append("g")
+      .classed("y-axis", true)
+      .attr("transform", `translate(${plotMarginLeft},0)`)
+      .call(yAxis)      
+      .append("text")
+      .text(yAxisLabel? yAxisLabel : "")
+      .attr("transform", `rotate(-90) translate(-${plotHeight/4}, -${30})`)
+      .attr("fill", "black")
+      .attr("x", 0)
+      .attr("y", 0);
+      
+      if (svg.selectAll(".x-axis").node()) {
+      svg.selectAll(".x-axis").remove();
     }
-    if (!svg.select(".y-axis").node() && data.length !== 0) {
-      svg
-        .append("g")
-        .classed("y-axis", true)
-        .attr("transform", `translate(${plotMarginLeft},0)`)
-        .call(yAxis);
-    } else {
+    addXAxis()
+ 
+    if (svg.select(".y-axis").node()) {
       svg.select(".y-axis").remove();
-      svg
-        .append("g")
-        .attr("transform", `translate(${plotMarginLeft},0)`)
-        .classed("y-axis", true)
-        .call(yAxis);
     }
+    addYAxis()
+    
     svg.selectAll(".y-axis path, line").style("stroke", "#d6d6d6");
   });
   return (

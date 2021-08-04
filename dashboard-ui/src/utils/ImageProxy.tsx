@@ -1,6 +1,5 @@
 import config from "../config.json";
 import parsePrometheusTextFormat from "parse-prometheus-text-format";
-import { stringify } from "postcss";
 
 export interface BuildInfo {
   package_version: string;
@@ -27,7 +26,7 @@ export const findNestedMetric = (
   label: string
 ) =>
   findMetric(metrics, name)?.metrics.find(
-    (elem: any) => elem.labels[labelName] == label
+    (elem: any) => elem.labels[labelName] === label
   );
 
 export const findCacheMetrics = (metrics: any, name: string) =>
@@ -49,7 +48,18 @@ export const findApiResponseTimeMetrics = (metrics: any) => {
     .sort((d) => d.value);
   return unparsed
     .map((elem, i) =>
-      i == 0 ? elem : { ...elem, value: elem.value - unparsed[i - 1].value }
+      i === 0 ? elem : { ...elem, value: elem.value - unparsed[i - 1].value }
     )
     .sort((d) => parseInt(d.name));
 };
+
+export const secondsToHMS = (d: number) => {
+  var h = Math.floor(d / 3600);
+  var m = Math.floor(d % 3600 / 60);
+  var s = Math.floor(d % 3600 % 60);
+
+  var hDisplay = h > 0 ? h + (h === 1 ? " hour, " : " hours, ") : "";
+  var mDisplay = m > 0 ? m + (m === 1 ? " minute, " : " minutes, ") : "";
+  var sDisplay = s > 0 ? s + (s === 1 ? " second" : " seconds") : "";
+  return hDisplay + mDisplay + sDisplay; 
+}

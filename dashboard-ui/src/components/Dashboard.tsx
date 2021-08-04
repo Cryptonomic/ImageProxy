@@ -1,5 +1,4 @@
-import React, { ReactElement, ReactFragment, useState } from "react";
-import Panel from "./Panel";
+import React, { ReactElement, useState } from "react";
 
 const Dashboard: React.FC = ({ children }) => {
   const [ind, setInd] = useState(0);

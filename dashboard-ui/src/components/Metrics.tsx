@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useInterval from "react-useinterval";
 import {
   getMetrics,
@@ -7,6 +7,7 @@ import {
   findApiMetrics,
   findCacheMetrics,
   findApiResponseTimeMetrics,
+  secondsToHMS
 } from "../utils/ImageProxy";
 import info from "../images/information.png";
 import LineGraph from "./LineGraph";
@@ -15,12 +16,13 @@ import BarChart from "./BarChart";
 const Block: React.FC<{
   title: string;
   className?: string;
-  value?: string;
-  units?: string;
+  value?: string | number;
+  units?: {unit: string, threshold: number}[] | string;
   hint?: string;
 }> = ({ title, value, hint, units, children, className }) => {
   const [showToolTip, setShowing] = useState(false);
-
+  const chosenUnit = typeof units == "string" ? {unit: units, threshold: 1} : (units as {unit: string, threshold: number}[])?.reverse().find(({ threshold}) => threshold <= (value ? value : 0)) || {unit: "", threshold: 1}
+  
   return (
     <div
       className={`relative h-44 w-1/6 min-w-min m-4 p-4 flex flex-col bg-background-dark rounded-lg transform transition duration-75	 hover:scale-105 ${className}`}
@@ -43,7 +45,7 @@ const Block: React.FC<{
       </div>
       <p className="text-lg text-center">{title}</p>
       <div className="my-auto text-4xl text-center">
-        {value} {units} {children}
+        {value ? typeof value == "number" ? value/ (chosenUnit ? chosenUnit.threshold: 1) : value : ""} {chosenUnit?.unit} {children}
       </div>
     </div>
   );
@@ -70,7 +72,8 @@ const Metrics = () => {
   const findNested = (name: string, labelName: string, label: string) =>
     findNestedMetric(metrics, name, labelName, label);
   const findCache = (name: string) => findCacheMetrics(metrics, name);
-
+  const standardUnits = [{unit: "K", threshold: 1e3}, {unit: "Mil", threshold: 1e6}, {unit: "Bil", threshold: 1e9}]
+  const digitalUnits = [{unit: "B", threshold: 1}, {unit: "Kb", threshold: 1e3}, {unit: "Mb", threshold: 1e6}, {unit: "Gb", threshold: 1e9}]
   useInterval(() => {
     getMetrics().then((d) => {
       setMetrics(d);
@@ -129,57 +132,58 @@ const Metrics = () => {
     <div className="w-full h-full flex flex-wrap content-start justify-center">
       <Block
         title="Uptime"
-        value={(
-          ((Date.now() / 1e3) as number) -
-          find("process_start_time_seconds")?.metrics[0].value
-        ).toFixed(3)}
-        units="Seconds"
+        value={secondsToHMS(find("process_start_time_seconds") ? (((Date.now() / 1e3) as number) -
+          find("process_start_time_seconds")?.metrics[0].value) : 0)}
         hint={find("process_start_time_seconds")?.help}
       />
       <Block
         title="Cache Usage"
-        value={(
-          (findCache("mem_used_bytes")?.value /
+        value={
+          ((findCache("mem_used_bytes")?.value /
             findCache("mem_total_bytes")?.value) *
           100
         )
           .toFixed(3)
-          .toString()}
+          }
         units="%"
         hint={"Percentage of cache memory used"}
       />
       <Block
         title="Cache Mem"
-        value={(findCache("mem_total_bytes")?.value / 1e6)
+        value={findCache("mem_total_bytes")?.value
           .toFixed(3)
-          .toString()}
-        units="Mb"
+          }
+        units={digitalUnits}
         hint={"Total cache memory"}
       />
 
       <Block
         title="Cached Documents"
         value={findCache("items")?.value}
+        units ={standardUnits}
         hint={"Number of items in cache"}
       />
       <Block
         title="Total Requests"
-        value={totalRequests.toString()}
+        value={totalRequests}
+        units={standardUnits}
         hint={"Total number of requests made"}
       />
       <Block
         title="Fetched (Docs)"
-        value={findNested("document", "status", "fetched")?.value || 0}
+        value={parseInt(findNested("document", "status", "fetched")?.value)|| 0}
+        units={standardUnits}
         hint={"Number of unforced fetches"}
       />
       <Block
         title="Forced (Docs)"
-        value={findNested("document", "status", "forced")?.value || 0}
+        value={parseInt(findNested("document", "status", "forced")?.value) || 0}
         hint={"Number of forced fetches"}
       />
       <Block
         title="Errors"
-        value={find("errors")?.metrics[0].value}
+        value={parseInt(find("errors")?.metrics[0].value)}
+        units={standardUnits}
         hint={find("errors")?.help}
       />
 
@@ -187,22 +191,23 @@ const Metrics = () => {
         title="Virtual Memory"
         value={find("process_virtual_memory_bytes")?.metrics[0].value}
         hint={find("process_virtual_memory_bytes")?.help}
-        units="Bytes"
+        units={digitalUnits}
       />
       <Block
         title="Total CPU Time"
-        value={find("process_cpu_seconds_total")?.metrics[0].value}
+        value={secondsToHMS(find("process_cpu_seconds_total")?.metrics[0].value)}
         hint={find("process_cpu_seconds_total")?.help}
-        units="Seconds"
       />
       <Block
         title="Api Response Time in Milliseconds"
-        hint="Bar chart showing query responses grouped by reesponse time"
+        hint="Bar chart showing query responses grouped by response time"
         className="h-auto"
       >
         <BarChart
           width={800}
           height={200}
+          xAxisLabel="Response Time (ms)"
+          yAxisLabel="Number of Responses"
           data={metrics ? findApiResponseTimeMetrics(metrics) : []}
           className="m-4"
         />
@@ -214,7 +219,8 @@ const Metrics = () => {
       >
         <LineGraph
           width={800}
-          height={200}
+          height={200}          
+          yAxisLabel="Requests per second"
           data={[
             {
               label: "requests per second",
@@ -233,9 +239,10 @@ const Metrics = () => {
         <LineGraph
           width={800}
           height={200}
+          yAxisLabel="Process Memory Usage"
           data={[
             {
-              label: "Mb Per Second",
+              label: "Mb usage",
               color: "#FF7477",
               coords: memTimeSeries,
             },
@@ -252,14 +259,15 @@ const Metrics = () => {
         <LineGraph
           width={800}
           height={200}
+          yAxisLabel="Traffic Per Second"
           data={[
             {
-              label: "data fetched per second",
+              label: "bytes fetched per second",
               color: "#FF7477",
               coords: trafficFetchedPerSec,
             },
             {
-              label: "data served per second",
+              label: "bytes served per second",
               color: "#47f9ff",
               coords: trafficServedPerSec,
             },
