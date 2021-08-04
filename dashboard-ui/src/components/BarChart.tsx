@@ -16,14 +16,24 @@ interface BarChartData {
 
 interface Props {
   title?: string;
+  className?: string;
   width: number;
   height: number;
   data: BarChartData[];
 }
-const BarChart: React.FC<Props> = ({ width, height, data, title }) => {
-  const plotMargin = 30;
-  const plotWidth = width - plotMargin;
-  const plotHeight = height - plotMargin;
+const BarChart: React.FC<Props> = ({
+  width,
+  height,
+  data,
+  title,
+  className,
+}) => {
+  const plotMarginLeft = 40;
+  const plotMarginRight = -20;
+  const plotMarginTop = 15;
+  const plotMarginBottom = 15;
+  const plotWidth = width - plotMarginLeft - plotMarginRight;
+  const plotHeight = height - plotMarginTop - plotMarginBottom;
   const svgRef = useRef(null);
 
   useEffect(() => {
@@ -33,13 +43,13 @@ const BarChart: React.FC<Props> = ({ width, height, data, title }) => {
       .range([plotHeight, 0]);
     const x = scaleBand()
       .domain(data.map((d) => d.name))
-      .range([plotMargin, plotWidth])
+      .range([plotMarginLeft, plotWidth])
       .padding(0.05);
 
     const xAxis = axisBottom(x).tickSize(-plotHeight).tickPadding(10);
     const yAxis = axisLeft(y)
       .ticks(5, "s")
-      .tickSize(-plotWidth)
+      .tickSize(-plotWidth + plotMarginLeft)
       .tickPadding(10);
 
     svg
@@ -64,13 +74,20 @@ const BarChart: React.FC<Props> = ({ width, height, data, title }) => {
       svg
         .append("g")
         .classed("y-axis", true)
-        .attr("transform", `translate(${plotMargin},0)`)
+        .attr("transform", `translate(${plotMarginLeft},0)`)
+        .call(yAxis);
+    } else {
+      svg.select(".y-axis").remove();
+      svg
+        .append("g")
+        .attr("transform", `translate(${plotMarginLeft},0)`)
+        .classed("y-axis", true)
         .call(yAxis);
     }
     svg.selectAll("path, line").style("stroke", "#d6d6d6");
   }, [data]);
   return (
-    <div className="flex flex-col">
+    <div className={`flex flex-col ${className}`}>
       {title && <div className="text-center text-lg m-4">{title}</div>}
       <svg ref={svgRef} height={height} width={width}></svg>
     </div>

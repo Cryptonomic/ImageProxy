@@ -6,7 +6,7 @@ import Info from "./components/Info";
 
 function App() {
   return (
-    <div className="flex flex-col h-full w-full bg-background">
+    <div className="bg-background">
       <Navbar />
       <Dashboard>
         <Panel name="Metrics">

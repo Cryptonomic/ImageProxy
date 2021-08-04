@@ -1,4 +1,4 @@
 {
-  "proxyURL": "http://localhost:3000",
+  "proxyURL": "http://imgproxy-prod.cryptonomic-infra.tech",
   "apikey": "e67b309d4587e57e93070ba49e5d33aaa09a9e6da4af9654f0708df6c738aabd"
 }

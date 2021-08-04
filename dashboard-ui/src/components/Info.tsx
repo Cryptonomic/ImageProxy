@@ -7,7 +7,7 @@ const Info = () => {
     getInfo().then((i) => setInfo(i));
   }, []);
   return (
-    <div className="px-8 py-6">
+    <div className="px-28 py-6">
       <div>Package Version: {info?.package_version} </div>
       <div>Git Version: {info?.git_version} </div>
     </div>
