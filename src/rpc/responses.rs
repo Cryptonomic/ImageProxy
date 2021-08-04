@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hyper::{Body, Response};
 use log::error;
 use serde::Serialize;
@@ -9,6 +11,7 @@ use super::{
 };
 use crate::{
     document::Document,
+    metrics,
     moderation::{ModerationCategories, ModerationService},
 };
 
@@ -20,10 +23,20 @@ pub enum RpcStatus {
     Err,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub enum ModerationStatus {
     Allowed,
     Blocked,
+}
+
+impl From<bool> for ModerationStatus {
+    fn from(s: bool) -> Self {
+        if s {
+            ModerationStatus::Allowed
+        } else {
+            ModerationStatus::Blocked
+        }
+    }
 }
 
 #[derive(Default, Serialize)]
@@ -111,8 +124,7 @@ pub struct ServerError {
 impl FetchResponse {
     pub fn to_response(
         response_type: &ResponseType,
-        document: Option<&Document>,
-        rpc_status: RpcStatus,
+        document: Option<Arc<Document>>,
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
         req_id: &Uuid,
@@ -121,6 +133,9 @@ impl FetchResponse {
             ResponseType::Raw => document.map_or_else(
                 || Errors::InternalError.to_response(req_id),
                 |doc| {
+                    metrics::TRAFFIC
+                        .with_label_values(&["served"])
+                        .inc_by(doc.bytes.len() as u64);
                     Response::builder()
                         .status(200)
                         .header(hyper::header::CONTENT_TYPE, doc.content_type.clone())
@@ -132,13 +147,16 @@ impl FetchResponse {
             ResponseType::Json => {
                 let result = FetchResponse {
                     jsonrpc: String::from(VERSION),
-                    rpc_status,
+                    rpc_status: RpcStatus::Ok,
                     result: ModerationResult {
                         moderation_status,
                         categories,
                         data: document.map(|doc| doc.to_url()).unwrap_or_default(),
                     },
                 };
+                metrics::TRAFFIC
+                    .with_label_values(&["served"])
+                    .inc_by(result.result.data.len() as u64);
 
                 match serde_json::to_string_pretty(&result) {
                     Ok(body) => Response::builder()

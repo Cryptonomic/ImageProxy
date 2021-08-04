@@ -7,11 +7,10 @@ use std::sync::Arc;
 use hyper::Body;
 use hyper::Response;
 use log::debug;
-use log::{error, info, warn};
+use log::{error, info};
 use uuid::Uuid;
 
 use crate::document::Document;
-use crate::moderation::ModerationResponse;
 use crate::utils::sha512;
 use crate::{
     metrics,
@@ -46,8 +45,13 @@ impl Methods {
                 Ok(document)
             }
         } else {
-            let document = proxy.http_client.fetch(req_id, url).await?;
-            Ok(Arc::new(document))
+            match proxy.http_client.fetch(req_id, url).await {
+                Ok(document) => match SupportedMimeTypes::from_string(&document.content_type) {
+                    SupportedMimeTypes::Unsupported => Err(Errors::UnsupportedImageType),
+                    _ => Ok(Arc::new(document)),
+                },
+                Err(e) => Err(e),
+            }
         }
     }
 
@@ -57,153 +61,95 @@ impl Methods {
         params: &FetchRequestParams,
     ) -> Result<Response<Body>, Errors> {
         info!(
-            "New document fetch request, id={}, force={}, url={}",
+            "New fetch request, id={}, force={}, url={}",
             req_id, params.force, params.url
         );
 
-        // If forced, fetch document and return
         if params.force {
             metrics::DOCUMENT.with_label_values(&["forced"]).inc();
-
-            let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
-            let document_type = SupportedMimeTypes::from_string(&document.content_type);
-
-            if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id));
-            }
-            metrics::TRAFFIC
-                .with_label_values(&["served"])
-                .inc_by(document.bytes.len() as u64);
-            return Ok(FetchResponse::to_response(
-                &params.response_type,
-                Some(&document),
-                RpcStatus::Ok,
-                ModerationStatus::Allowed,
-                Vec::new(),
-                req_id,
-            ));
         }
 
         let urls = vec![params.url.clone()];
-        // Check the database for prior results
-        let cached_results = proxy
+        let db_results = proxy
             .database
             .get_moderation_result(&urls)
             .await
             .map_err(|e| {
                 error!("Error querying database for id={}, reason={}", req_id, e);
-                e
-            })
-            .unwrap_or_default();
+                Errors::InternalError
+            })?;
 
-        if !cached_results.is_empty() {
-            if cached_results.len() > 1 {
-                warn!("Found more than one cache results for id={}", req_id);
+        let (moderation_status, categories, document) = match db_results.get(0) {
+            Some(result) => {
+                info!(
+                    "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
+                    req_id, result.blocked, result.categories, result.provider
+                );
+                let document = if !result.blocked || params.force {
+                    Some(Methods::fetch_document(proxy.clone(), req_id, &params.url).await?)
+                } else {
+                    None
+                };
+                (result.blocked.into(), result.categories.clone(), document)
             }
-            let r = &cached_results[0];
-            metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
-            info!(
-                "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
-                req_id, r.blocked, r.categories, r.provider
-            );
-            // Send an appropriate response if moderation indicates content is blocked
-            if r.blocked {
-                Ok(FetchResponse::to_response(
-                    &ResponseType::Json,
-                    None,
-                    RpcStatus::Ok,
-                    ModerationStatus::Blocked,
-                    r.categories.clone(),
-                    req_id,
-                ))
-            } else {
+            None => {
+                metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
+                info!("No cached results found for id={}", req_id);
                 let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
+                let max_document_size = proxy.moderation_provider.max_document_size();
+                let supported_types = proxy.moderation_provider.supported_types();
+                let document_type = SupportedMimeTypes::from_string(&document.content_type);
+
+                metrics::MODERATION.with_label_values(&["requests"]).inc();
+
+                // Resize the image if required or reformat to png if required
+                let mod_response = if document.bytes.len() as u64 >= max_document_size
+                    || !supported_types.contains(&document_type)
+                {
+                    let resized_doc = document.resize_image(max_document_size)?;
+                    proxy.moderation_provider.moderate(&resized_doc).await?
+                } else {
+                    proxy.moderation_provider.moderate(&document).await?
+                };
+
                 metrics::TRAFFIC
-                    .with_label_values(&["served"])
+                    .with_label_values(&["moderated"])
                     .inc_by(document.bytes.len() as u64);
-                Ok(FetchResponse::to_response(
-                    &params.response_type,
-                    Some(&document),
-                    RpcStatus::Ok,
-                    ModerationStatus::Allowed,
-                    Vec::new(),
-                    req_id,
-                ))
-            }
-        } else {
-            metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
-            info!("No cached results found for id={}", req_id);
 
-            // Moderate and update the db
-            let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
+                let blocked = !mod_response.categories.is_empty();
+                let mod_status: ModerationStatus = blocked.into();
 
-            let document_type = SupportedMimeTypes::from_string(&document.content_type);
-            if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id));
-            }
-
-            let max_document_size = proxy.moderation_provider.max_document_size();
-            let supported_types = proxy.moderation_provider.supported_types();
-
-            metrics::MODERATION.with_label_values(&["requests"]).inc();
-
-            // Resize the image if required or reformat to png if required
-            let formatted: Result<ModerationResponse, Errors> = if document.bytes.len() as u64
-                >= max_document_size
-                || !supported_types.contains(&document_type)
-            {
-                let resized_doc = document.resize_image(document_type, max_document_size)?;
-                proxy.moderation_provider.moderate(&resized_doc).await
-            } else {
-                proxy.moderation_provider.moderate(&document).await
-            };
-
-            metrics::TRAFFIC
-                .with_label_values(&["moderated"])
-                .inc_by(document.bytes.len() as u64);
-
-            match formatted {
-                Ok(mr) => {
-                    let blocked = !mr.categories.is_empty();
-                    match proxy
-                        .database
-                        .add_moderation_result(&params.url, mr.provider, blocked, &mr.categories)
-                        .await
-                    {
-                        Ok(_) => info!("Database updated for id={}", req_id),
-                        Err(e) => {
-                            error!("Database not updated for id={}, reason={}", req_id, e)
-                        }
-                    }
-
-                    if blocked {
-                        metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
-                        Ok(FetchResponse::to_response(
-                            &ResponseType::Json,
-                            None,
-                            RpcStatus::Ok,
-                            ModerationStatus::Blocked,
-                            mr.categories.clone(),
-                            req_id,
-                        ))
-                    } else {
-                        metrics::TRAFFIC
-                            .with_label_values(&["served"])
-                            .inc_by(document.bytes.len() as u64);
-
-                        Ok(FetchResponse::to_response(
-                            &params.response_type,
-                            Some(&document),
-                            RpcStatus::Ok,
-                            ModerationStatus::Allowed,
-                            Vec::new(),
-                            req_id,
-                        ))
-                    }
+                if blocked {
+                    metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
                 }
-                Err(e) => Ok(e.to_response(req_id)),
+
+                let categories = mod_response.categories.clone();
+                match proxy
+                    .database
+                    .add_moderation_result(
+                        &params.url,
+                        mod_response.provider,
+                        blocked,
+                        &mod_response.categories,
+                    )
+                    .await
+                {
+                    Ok(_) => info!("Database updated for id={}", req_id),
+                    Err(e) => {
+                        error!("Database not updated for id={}, reason={}", req_id, e)
+                    }
+                };
+                (mod_status, categories, Some(document.clone()))
             }
-        }
+        };
+
+        Ok(FetchResponse::to_response(
+            &params.response_type,
+            document,
+            moderation_status,
+            categories,
+            req_id,
+        ))
     }
 
     pub async fn describe(

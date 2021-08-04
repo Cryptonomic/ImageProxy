@@ -47,11 +47,8 @@ impl Document {
         })
     }
 
-    pub fn resize_image(
-        &self,
-        image_type: SupportedMimeTypes,
-        max_size: u64,
-    ) -> Result<Document, Errors> {
+    pub fn resize_image(&self, max_size: u64) -> Result<Document, Errors> {
+        let image_type = SupportedMimeTypes::from_string(&self.content_type);
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
         let scale = self.bytes.len() as f64 / max_size as f64;
