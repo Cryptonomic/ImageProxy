@@ -1,12 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import {
-  select,
-  scaleLinear,
-  scaleBand,
-  max,
-  axisBottom,
-  axisLeft,
-} from "d3";
+import { select, scaleLinear, scaleBand, max, axisBottom, axisLeft } from "d3";
 
 interface BarChartData {
   name: string;
@@ -18,8 +11,8 @@ interface Props {
   className?: string;
   width: number;
   height: number;
-  xAxisLabel?:string;
-  yAxisLabel?:string;
+  xAxisLabel?: string;
+  yAxisLabel?: string;
   data: BarChartData[];
 }
 const BarChart: React.FC<Props> = ({
@@ -29,9 +22,9 @@ const BarChart: React.FC<Props> = ({
   title,
   className,
   xAxisLabel,
-  yAxisLabel
+  yAxisLabel,
 }) => {
-  const plotMarginLeft = 40;
+  const plotMarginLeft = 50;
   const plotMarginRight = -20;
   const plotMarginTop = 15;
   const plotMarginBottom = 20;
@@ -66,33 +59,40 @@ const BarChart: React.FC<Props> = ({
       .attr("height", ({ value }) => plotHeight - y(value))
       .attr("width", x.bandwidth)
       .attr("fill", "#FF7477");
-    const addXAxis = () => svg
+    const addXAxis = () =>
+      svg
         .append("g")
         .attr("transform", `translate(0,${plotHeight})`)
         .classed("x-axis", true)
         .call(xAxis)
         .append("text")
         .text(xAxisLabel ? xAxisLabel : "")
-        .attr("transform", `translate(${plotWidth/2},${plotMarginBottom + 15})`)        
-        .attr("fill", "black")        ;
-    const addYAxis = () => svg
+        .attr(
+          "transform",
+          `translate(${plotWidth / 2},${plotMarginBottom + 15})`
+        )
+        .attr("fill", "black");
+    const addYAxis = () =>
+      svg
         .append("g")
         .classed("y-axis", true)
         .attr("transform", `translate(${plotMarginLeft},0)`)
         .call(yAxis)
         .append("text")
-        .text(yAxisLabel? yAxisLabel : "")
-        .attr("transform", `rotate(-90) translate(-${plotHeight/6}, -${20})`)
+        .text(yAxisLabel ? yAxisLabel : "")
+        .attr("transform", `rotate(-90) translate(-${plotHeight / 6}, -${40})`)
         .attr("fill", "black")
         .attr("x", 0)
         .attr("y", 0);
-    if (!svg.select(".x-axis").node()) {
-      addXAxis()
+
+    if (svg.select(".x-axis").node()) {
+      svg.select(".x-axis").remove();
     }
     if (svg.select(".y-axis").node()) {
       svg.select(".y-axis").remove();
-    } 
-    addYAxis()
+    }
+    addXAxis();
+    addYAxis();
     svg.selectAll("path, line").style("stroke", "#d6d6d6");
   }, [data, plotHeight, plotWidth, xAxisLabel, yAxisLabel]);
   return (

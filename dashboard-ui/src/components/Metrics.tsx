@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useInterval from "react-useinterval";
 import {
   getMetrics,
@@ -7,7 +7,7 @@ import {
   findApiMetrics,
   findCacheMetrics,
   findApiResponseTimeMetrics,
-  secondsToHMS
+  secondsToHMS,
 } from "../utils/ImageProxy";
 import info from "../images/information.png";
 import LineGraph from "./LineGraph";
@@ -17,12 +17,28 @@ const Block: React.FC<{
   title: string;
   className?: string;
   value?: string | number;
-  units?: {unit: string, threshold: number}[] | string;
+  units?: { unit: string; threshold: number }[] | string;
   hint?: string;
 }> = ({ title, value, hint, units, children, className }) => {
   const [showToolTip, setShowing] = useState(false);
-  const chosenUnit = typeof units == "string" ? {unit: units, threshold: 1} : (units as {unit: string, threshold: number}[])?.reverse().find(({ threshold}) => threshold <= (value ? value : 0)) || {unit: "", threshold: 1}
-  
+  const chosenUnit =
+    typeof units == "string"
+      ? { unit: units, threshold: 1 }
+      : (units as { unit: string; threshold: number }[])
+          ?.sort((a, b) => b.threshold - a.threshold)
+          .find(({ threshold }) => threshold <= (value ? value : 0)) || {
+          unit: "",
+          threshold: 1,
+        };
+  const numericValue =
+    (value as number) / (chosenUnit ? chosenUnit.threshold : 1);
+  const valueToDisplay =
+    typeof value == "number"
+      ? numericValue === Math.floor(numericValue)
+        ? numericValue
+        : numericValue.toFixed(3)
+      : value;
+
   return (
     <div
       className={`relative h-44 w-1/6 min-w-min m-4 p-4 flex flex-col bg-background-dark rounded-lg transform transition duration-75	 hover:scale-105 ${className}`}
@@ -45,7 +61,7 @@ const Block: React.FC<{
       </div>
       <p className="text-lg text-center">{title}</p>
       <div className="my-auto text-4xl text-center">
-        {value ? typeof value == "number" ? value/ (chosenUnit ? chosenUnit.threshold: 1) : value : ""} {chosenUnit?.unit} {children}
+        {valueToDisplay} {chosenUnit?.unit} {children}
       </div>
     </div>
   );
@@ -72,9 +88,19 @@ const Metrics = () => {
   const findNested = (name: string, labelName: string, label: string) =>
     findNestedMetric(metrics, name, labelName, label);
   const findCache = (name: string) => findCacheMetrics(metrics, name);
-  const standardUnits = [{unit: "K", threshold: 1e3}, {unit: "Mil", threshold: 1e6}, {unit: "Bil", threshold: 1e9}]
-  const digitalUnits = [{unit: "B", threshold: 1}, {unit: "Kb", threshold: 1e3}, {unit: "Mb", threshold: 1e6}, {unit: "Gb", threshold: 1e9}]
-  useInterval(() => {
+  const standardUnits = [
+    { unit: "K", threshold: 1e3 },
+    { unit: "Mil", threshold: 1e6 },
+    { unit: "Bil", threshold: 1e9 },
+  ];
+  const digitalUnits = [
+    { unit: "B", threshold: 1 },
+    { unit: "Kb", threshold: 1e3 },
+    { unit: "Mb", threshold: 1e6 },
+    { unit: "Gb", threshold: 1e9 },
+  ];
+
+  const update = () =>
     getMetrics().then((d) => {
       setMetrics(d);
       const currSumRequests =
@@ -94,7 +120,6 @@ const Metrics = () => {
         "metric",
         "served"
       )?.value;
-      console.log(currTrafficFetched, trafficFetched);
       if (trafficFetched && trafficFetched !== 0) {
         trafficFetchedPerSec.shift();
         trafficFetchedPerSec.push([
@@ -125,42 +150,46 @@ const Metrics = () => {
       setMemTimeSeries(memTimeSeries);
       setTotalRequests(currSumRequests);
     });
+  /* update(); */
+  useEffect(() => {
+    update();
+  }, []);
+  useInterval(() => {
+    update();
   }, 5000);
-
-  console.log(metrics);
   return (
     <div className="w-full h-full flex flex-wrap content-start justify-center">
       <Block
         title="Uptime"
-        value={secondsToHMS(find("process_start_time_seconds") ? (((Date.now() / 1e3) as number) -
-          find("process_start_time_seconds")?.metrics[0].value) : 0)}
+        value={secondsToHMS(
+          find("process_start_time_seconds")
+            ? ((Date.now() / 1e3) as number) -
+                find("process_start_time_seconds")?.metrics[0].value
+            : 0
+        )}
         hint={find("process_start_time_seconds")?.help}
       />
       <Block
         title="Cache Usage"
-        value={
-          ((findCache("mem_used_bytes")?.value /
+        value={(
+          (findCache("mem_used_bytes")?.value /
             findCache("mem_total_bytes")?.value) *
           100
-        )
-          .toFixed(3)
-          }
+        ).toFixed(3)}
         units="%"
         hint={"Percentage of cache memory used"}
       />
       <Block
         title="Cache Mem"
-        value={findCache("mem_total_bytes")?.value
-          .toFixed(3)
-          }
+        value={parseInt(findCache("mem_total_bytes")?.value)}
         units={digitalUnits}
         hint={"Total cache memory"}
       />
 
       <Block
         title="Cached Documents"
-        value={findCache("items")?.value}
-        units ={standardUnits}
+        value={parseInt(findCache("items")?.value) || 0}
+        units={standardUnits}
         hint={"Number of items in cache"}
       />
       <Block
@@ -169,9 +198,12 @@ const Metrics = () => {
         units={standardUnits}
         hint={"Total number of requests made"}
       />
+
       <Block
         title="Fetched (Docs)"
-        value={parseInt(findNested("document", "status", "fetched")?.value)|| 0}
+        value={
+          parseInt(findNested("document", "status", "fetched")?.value) || 0
+        }
         units={standardUnits}
         hint={"Number of unforced fetches"}
       />
@@ -182,20 +214,23 @@ const Metrics = () => {
       />
       <Block
         title="Errors"
-        value={parseInt(find("errors")?.metrics[0].value)}
+        value={parseInt(find("errors")?.metrics[0].value) || 0}
         units={standardUnits}
         hint={find("errors")?.help}
       />
 
       <Block
         title="Virtual Memory"
-        value={find("process_virtual_memory_bytes")?.metrics[0].value}
+        value={parseInt(find("process_virtual_memory_bytes")?.metrics[0].value)}
         hint={find("process_virtual_memory_bytes")?.help}
         units={digitalUnits}
       />
+
       <Block
         title="Total CPU Time"
-        value={secondsToHMS(find("process_cpu_seconds_total")?.metrics[0].value)}
+        value={secondsToHMS(
+          find("process_cpu_seconds_total")?.metrics[0].value || 0
+        )}
         hint={find("process_cpu_seconds_total")?.help}
       />
       <Block
@@ -219,7 +254,7 @@ const Metrics = () => {
       >
         <LineGraph
           width={800}
-          height={200}          
+          height={200}
           yAxisLabel="Requests per second"
           data={[
             {
@@ -242,7 +277,7 @@ const Metrics = () => {
           yAxisLabel="Process Memory Usage"
           data={[
             {
-              label: "Mb usage",
+              label: "Bytes used",
               color: "#FF7477",
               coords: memTimeSeries,
             },
@@ -250,12 +285,12 @@ const Metrics = () => {
           className="m-4"
         />
       </Block>
+
       <Block
         title="Traffic"
         hint="Amount of data sent/recieved per second"
         className="h-auto"
       >
-        {console.log(trafficFetchedPerSec)}
         <LineGraph
           width={800}
           height={200}

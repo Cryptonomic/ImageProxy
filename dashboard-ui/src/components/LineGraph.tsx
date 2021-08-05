@@ -17,7 +17,7 @@ interface Props {
   width: number;
   height: number;
   xAxisLabel?: string;
-  yAxisLabel?: string;  
+  yAxisLabel?: string;
   data: { label: string; color: string; coords: [number, number][] }[];
 }
 
@@ -28,9 +28,9 @@ const LineGraph: React.FC<Props> = ({
   data,
   className,
   xAxisLabel,
-  yAxisLabel
+  yAxisLabel,
 }) => {
-  const plotMarginLeft = 40;
+  const plotMarginLeft = 50;
   const plotMarginRight = -20;
   const plotMarginTop = 20;
   const plotMarginBottom = 20;
@@ -85,38 +85,43 @@ const LineGraph: React.FC<Props> = ({
         .attr("width", "20")
         .attr("height", "3")
         .attr("fill", color);
-    });    
-    const addXAxis = () => svg
-      .append("g")
-      .attr("transform", `translate(0,${plotHeight})`)
-      .classed("x-axis", true)
-      .call(xAxis)
-      .append("text")
-      .text(xAxisLabel ? xAxisLabel : "")
-      .attr("transform", `translate(${plotWidth/2},${plotMarginBottom + 20})`)        
-      .attr("fill", "black");
-    const addYAxis = () => svg
-      .append("g")
-      .classed("y-axis", true)
-      .attr("transform", `translate(${plotMarginLeft},0)`)
-      .call(yAxis)      
-      .append("text")
-      .text(yAxisLabel? yAxisLabel : "")
-      .attr("transform", `rotate(-90) translate(-${plotHeight/4}, -${30})`)
-      .attr("fill", "black")
-      .attr("x", 0)
-      .attr("y", 0);
-      
-      if (svg.selectAll(".x-axis").node()) {
+    });
+    const addXAxis = () =>
+      svg
+        .append("g")
+        .attr("transform", `translate(0,${plotHeight})`)
+        .classed("x-axis", true)
+        .call(xAxis)
+        .append("text")
+        .text(xAxisLabel ? xAxisLabel : "")
+        .attr(
+          "transform",
+          `translate(${plotWidth / 2},${plotMarginBottom + 20})`
+        )
+        .attr("fill", "black");
+    const addYAxis = () =>
+      svg
+        .append("g")
+        .classed("y-axis", true)
+        .attr("transform", `translate(${plotMarginLeft},0)`)
+        .call(yAxis)
+        .append("text")
+        .text(yAxisLabel ? yAxisLabel : "")
+        .attr("transform", `rotate(-90) translate(-${plotHeight / 4}, -${40})`)
+        .attr("fill", "black")
+        .attr("x", 0)
+        .attr("y", 0);
+
+    if (svg.selectAll(".x-axis").node()) {
       svg.selectAll(".x-axis").remove();
     }
-    addXAxis()
- 
+    addXAxis();
+
     if (svg.select(".y-axis").node()) {
       svg.select(".y-axis").remove();
     }
-    addYAxis()
-    
+    addYAxis();
+
     svg.selectAll(".y-axis path, line").style("stroke", "#d6d6d6");
   });
   return (
@@ -125,7 +130,7 @@ const LineGraph: React.FC<Props> = ({
       <svg ref={svgRef} height={height} width={width}></svg>
       <div className="flex items-center justify-start w-full space-x-8">
         {data.map(({ label, color }, i) => (
-          <div className="flex">
+          <div key={i} className="flex">
             <svg width={20} height={3} className={`m-2 label-${i}`} />{" "}
             <p className="text-xs">{label}</p>
           </div>

@@ -54,12 +54,12 @@ export const findApiResponseTimeMetrics = (metrics: any) => {
 };
 
 export const secondsToHMS = (d: number) => {
-  var h = Math.floor(d / 3600);
-  var m = Math.floor(d % 3600 / 60);
-  var s = Math.floor(d % 3600 % 60);
+  const h = Math.floor(d / 3600);
+  const m = Math.floor((d % 3600) / 60);
+  const s = (d % 3600) % 60;
 
-  var hDisplay = h > 0 ? h + (h === 1 ? " hour, " : " hours, ") : "";
-  var mDisplay = m > 0 ? m + (m === 1 ? " minute, " : " minutes, ") : "";
-  var sDisplay = s > 0 ? s + (s === 1 ? " second" : " seconds") : "";
-  return hDisplay + mDisplay + sDisplay; 
-}
+  const hDisplay = h > 0 ? h + (h === 1 ? " hr, " : " hrs, ") : "";
+  const mDisplay = m > 0 ? m + (m === 1 ? " min, " : " mins, ") : "";
+  const sDisplay = s > 0 ? s.toFixed(3) + (s === 1 ? " sec" : " secs") : "";
+  return hDisplay + mDisplay + sDisplay;
+};
