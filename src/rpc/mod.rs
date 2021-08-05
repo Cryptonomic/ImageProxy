@@ -6,12 +6,11 @@ use std::sync::Arc;
 
 use hyper::Body;
 use hyper::Response;
-use log::debug;
-use log::{error, info};
+use log::{debug, error, info};
 use uuid::Uuid;
 
 use crate::document::Document;
-use crate::utils::sha512;
+use crate::utils::sha256;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
@@ -33,24 +32,30 @@ impl Methods {
         req_id: &Uuid,
         url: &str,
     ) -> Result<Arc<Document>, Errors> {
-        if let Some(cache) = &proxy.cache {
-            let cache_key = sha512(url.as_bytes());
-            if let Some(document) = cache.get(&cache_key) {
+        let cache_key = sha256(url.as_bytes());
+        let cached_doc = proxy
+            .cache
+            .as_ref()
+            .map(|cache| {
                 debug!("Fetched document from cache, url:{}", url);
-                Ok(document)
-            } else {
-                let document = Arc::new(proxy.http_client.fetch(req_id, url).await?);
-                debug!("Inserted document into cache, url:{}", url);
-                cache.put(cache_key, document.clone());
-                Ok(document)
-            }
+                cache.get(&cache_key)
+            })
+            .flatten();
+
+        if let Some(doc) = cached_doc {
+            Ok(doc)
         } else {
-            match proxy.http_client.fetch(req_id, url).await {
-                Ok(document) => match SupportedMimeTypes::from_string(&document.content_type) {
-                    SupportedMimeTypes::Unsupported => Err(Errors::UnsupportedImageType),
-                    _ => Ok(Arc::new(document)),
-                },
-                Err(e) => Err(e),
+            let document = Arc::new(proxy.http_client.fetch(req_id, url).await?);
+            if SupportedMimeTypes::from_string(&document.content_type)
+                == SupportedMimeTypes::Unsupported
+            {
+                Err(Errors::UnsupportedImageType)
+            } else {
+                if let Some(cache) = &proxy.cache {
+                    debug!("Inserted document into cache, url:{}", url);
+                    cache.put(cache_key, document.clone());
+                }
+                Ok(document)
             }
         }
     }

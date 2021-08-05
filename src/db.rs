@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::{
     config::DatabaseConfig,
     moderation::{ModerationCategories, ModerationService},
-    utils::sha512,
+    utils::sha256,
 };
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
@@ -66,7 +66,7 @@ impl Database {
         categories: &[ModerationCategories],
     ) -> Result<()> {
         let id = id.to_string();
-        let url_hash = sha512(url.as_bytes());
+        let url_hash = sha256(url.as_bytes());
         let timestamp = chrono::Utc::now();
         let cat_str =
             serde_json::to_string(categories).unwrap_or_else(|_| String::from("json_error"));
@@ -114,7 +114,7 @@ impl Database {
         blocked: bool,
         categories: &[ModerationCategories],
     ) -> Result<()> {
-        let url_hash = sha512(url.as_bytes());
+        let url_hash = sha256(url.as_bytes());
         let timestamp = chrono::Utc::now();
         let cat_str =
             serde_json::to_string(categories).unwrap_or_else(|_| String::from("json_error"));
@@ -141,7 +141,7 @@ impl Database {
         blocked: bool,
         categories: &[ModerationCategories],
     ) -> Result<()> {
-        let url_hash = sha512(url.as_bytes());
+        let url_hash = sha256(url.as_bytes());
         let doc_hash = ""; //FIXME
         let timestamp = chrono::Utc::now();
         let provider_str =
@@ -157,7 +157,7 @@ impl Database {
     }
 
     pub async fn get_moderation_result(&self, url: &[String]) -> Result<Vec<DocumentCacheRow>> {
-        let url_hashes: Vec<String> = url.iter().map(|u| sha512(u.as_bytes())).collect();
+        let url_hashes: Vec<String> = url.iter().map(|u| sha256(u.as_bytes())).collect();
         let conn = self.pool.get().await?;
         let results = conn
             .query(
