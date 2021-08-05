@@ -1,4 +1,4 @@
-name: build
+name: lint
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -31,7 +31,9 @@ jobs:
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
           target
-        key: ${{ runner.os }}-build-cache-${{ hashFiles('Cargo.lock') }}
+        key: ${{ runner.os }}-lint-cache-${{ hashFiles('Cargo.lock') }}
         restore-keys: ${{ runner.os }}-build-cache
-    - name: Build
-      run: cargo build
+    - name: Install Clippy
+      run: rustup component add clippy
+    - name: Clippy
+      run: cargo clippy -- -D warnings
