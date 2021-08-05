@@ -1,5 +1,5 @@
 # NFT Image Proxy
-[![Build](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml/badge.svg)](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml)
+[![build](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml/badge.svg)](https://github.com/Cryptonomic/ImageProxy/actions/workflows/build.yml) [![codecov](https://codecov.io/gh/Cryptonomic/ImageProxy/branch/main/graph/badge.svg)](https://codecov.io/gh/Cryptonomic/ImageProxy) [![Version](https://img.shields.io/docker/v/cryptonomictech/nft-image-proxy)](https://hub.docker.com/r/cryptonomictech/nft-image-proxy) ![license](https://img.shields.io/github/license/cryptonomic/ImageProxy) [![docker-pulls](https://img.shields.io/docker/pulls/cryptonomictech/nft-image-proxy)](https://hub.docker.com/r/cryptonomictech/nft-image-proxy)
 
 Image Proxy supporting automatic content moderation for use with Tezos Wallets and other applications in the ecosystem.
 
