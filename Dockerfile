@@ -1,5 +1,14 @@
+FROM node:16-buster AS dashboard-builder
+WORKDIR /opt/dashboard
+COPY dashboard-ui/package.* .
+RUN npm i
+COPY dashboard-ui/ ./
+RUN npm run build
+
 FROM rustlang/rust:nightly-bullseye AS builder
 WORKDIR /opt/img_proxy
+COPY --from=dashboard-builder /opt/dashboard/build ./dashboard-ui/build
+RUN ls -al ./dashboard-ui
 COPY Cargo.lock .
 COPY Cargo.toml .
 COPY build.rs .

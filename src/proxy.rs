@@ -29,12 +29,16 @@ use chrono::Utc;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::error;
 use prometheus::Encoder;
+use rust_embed::RustEmbed;
 use serde::de;
 use serde_json;
 use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
-
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
+
+#[derive(RustEmbed)]
+#[folder = "dashboard-ui/build"]
+struct Asset;
 
 pub struct Proxy {
     pub config: Configuration,
@@ -103,6 +107,19 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .unwrap_or_default()),
         (&Method::GET, "/info") => info().await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
+        (&Method::GET, path) => {
+            let file = Asset::get(&path[1..]);
+            match file {
+                Some(f) => Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from(f.data.into_owned()))
+                    .unwrap()),
+                None => Ok(Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::default())
+                    .unwrap_or_default()),
+            }
+        }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::default())
