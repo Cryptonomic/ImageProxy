@@ -1,17 +1,22 @@
 import config from "../config.json";
 import parsePrometheusTextFormat from "parse-prometheus-text-format";
 
+export const proxyURL =
+  process.env.NODE_ENV === "production"
+    ? window.location.origin
+    : config.proxyURL;
+
 export interface BuildInfo {
   package_version: string;
   git_version: string;
 }
 
 export const getInfo = async (): Promise<BuildInfo> => {
-  return (await fetch(`${config.proxyURL}/info`)).json();
+  return (await fetch(`${proxyURL}/info`)).json();
 };
 
 export const getMetrics = async () => {
-  return fetch(`${config.proxyURL}/metrics`).then((d) =>
+  return fetch(`${proxyURL}/metrics`).then((d) =>
     d.text().then((raw) => parsePrometheusTextFormat(raw))
   );
 };
@@ -38,8 +43,9 @@ export const findApiMetrics = (metrics: any, name: string) => {
 };
 
 export const findApiResponseTimeMetrics = (metrics: any) => {
-  const responseTimes = findMetric(metrics, "api_response_time").metrics[0]
+  const responseTimes = findMetric(metrics, "api_response_time")?.metrics[0]
     .buckets;
+  if (!responseTimes) return [];
   const unparsed = Object.keys(responseTimes)
     .map((name) => ({
       name,

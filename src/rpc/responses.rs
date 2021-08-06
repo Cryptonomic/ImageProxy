@@ -4,7 +4,10 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::error::{Errors, RpcError};
-use crate::moderation::{ModerationCategories, ModerationService};
+use crate::{
+    config::Configuration,
+    moderation::{ModerationCategories, ModerationService},
+};
 
 use super::VERSION;
 
@@ -139,6 +142,7 @@ impl DescribeResponse {
         rpc_status: RpcStatus,
         describe_results: Vec<DescribeResult>,
         req_id: &Uuid,
+        config: &Configuration,
     ) -> Response<Body> {
         let result = DescribeResponse {
             jsonrpc: String::from(VERSION),
@@ -150,7 +154,10 @@ impl DescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .header(
+                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    config.cors.origin.to_owned(),
+                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
@@ -162,7 +169,12 @@ impl DescribeResponse {
 }
 
 impl ReportResponse {
-    pub fn to_response(rpc_status: RpcStatus, url: &str, req_id: &Uuid) -> Response<Body> {
+    pub fn to_response(
+        rpc_status: RpcStatus,
+        url: &str,
+        req_id: &Uuid,
+        config: &Configuration,
+    ) -> Response<Body> {
         let result = ReportResponse {
             jsonrpc: String::from(VERSION),
             rpc_status,
@@ -176,7 +188,10 @@ impl ReportResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .header(
+                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    config.cors.origin.to_owned(),
+                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
@@ -192,6 +207,7 @@ impl ReportDescribeResponse {
         rpc_status: RpcStatus,
         results: Vec<ReportDescribeResult>,
         req_id: &Uuid,
+        config: &Configuration,
     ) -> Response<Body> {
         let result = ReportDescribeResponse {
             jsonrpc: String::from(VERSION),
@@ -203,7 +219,10 @@ impl ReportDescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .header(
+                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    config.cors.origin.to_owned(),
+                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {

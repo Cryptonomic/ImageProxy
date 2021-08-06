@@ -250,6 +250,7 @@ impl Methods {
                     RpcStatus::Ok,
                     describe_results,
                     req_id,
+                    &proxy.config,
                 ))
             }
             Err(e) => {
@@ -274,6 +275,7 @@ impl Methods {
                 RpcStatus::Ok,
                 &params.url,
                 req_id,
+                &proxy.config,
             )),
             Err(e) => {
                 error!("Database not updated for id={}, reason={}", req_id, e);
@@ -302,6 +304,7 @@ impl Methods {
                     RpcStatus::Ok,
                     results,
                     req_id,
+                    &proxy.config,
                 ))
             }
             Err(e) => {

@@ -105,7 +105,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::OK)
             .body(Body::default())
             .unwrap_or_default()),
-        (&Method::GET, "/info") => info().await,
+        (&Method::GET, "/info") => info(&proxy.config).await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
         (&Method::GET, path) => {
             let file = Asset::get(&path[1..]);
@@ -138,7 +138,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     })
 }
 
-async fn info() -> Result<Response<Body>, GenericError> {
+async fn info(config: &Configuration) -> Result<Response<Body>, GenericError> {
     let info = Info {
         package_version: built_info::PKG_VERSION,
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
@@ -147,7 +147,10 @@ async fn info() -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
-        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(
+            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            &config.cors.origin,
+        )
         .body(Body::from(result))
         .unwrap_or_default())
 }
@@ -171,7 +174,10 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
     Ok(Response::builder()
-        .header(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(
+            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            &proxy.config.cors.origin,
+        )
         .body(Body::from(output.unwrap_or(String::default())))
         .unwrap_or(
             Response::builder()

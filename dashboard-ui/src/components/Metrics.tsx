@@ -159,80 +159,94 @@ const Metrics = () => {
   }, 5000);
   return (
     <div className="w-full h-full flex flex-wrap content-start justify-center">
-      <Block
-        title="Uptime"
-        value={secondsToHMS(
-          find("process_start_time_seconds")
-            ? ((Date.now() / 1e3) as number) -
-                find("process_start_time_seconds")?.metrics[0].value
-            : 0
-        )}
-        hint={find("process_start_time_seconds")?.help}
-      />
-      <Block
-        title="Cache Usage"
-        value={(
-          (findCache("mem_used_bytes")?.value /
-            findCache("mem_total_bytes")?.value) *
-          100
-        ).toFixed(3)}
-        units="%"
-        hint={"Percentage of cache memory used"}
-      />
-      <Block
-        title="Cache Mem"
-        value={parseInt(findCache("mem_total_bytes")?.value)}
-        units={digitalUnits}
-        hint={"Total cache memory"}
-      />
+      <div className="flex flex-wrap justify-center">
+        <Block
+          title="Uptime"
+          value={secondsToHMS(
+            find("process_start_time_seconds")
+              ? ((Date.now() / 1e3) as number) -
+                  find("process_start_time_seconds")?.metrics[0].value
+              : 0
+          )}
+          hint={find("process_start_time_seconds")?.help}
+        />
+        <Block
+          title="Cache Usage"
+          value={(
+            (findCache("mem_used_bytes")?.value /
+              findCache("mem_total_bytes")?.value) *
+            100
+          ).toFixed(3)}
+          units="%"
+          hint={"Percentage of cache memory used"}
+        />
+        <Block
+          title="Cache Mem"
+          value={parseInt(findCache("mem_total_bytes")?.value)}
+          units={digitalUnits}
+          hint={"Total cache memory"}
+        />
 
-      <Block
-        title="Cached Documents"
-        value={parseInt(findCache("items")?.value) || 0}
-        units={standardUnits}
-        hint={"Number of items in cache"}
-      />
-      <Block
-        title="Total Requests"
-        value={totalRequests}
-        units={standardUnits}
-        hint={"Total number of requests made"}
-      />
+        <Block
+          title="Cached Documents"
+          value={parseInt(findCache("items")?.value) || 0}
+          units={standardUnits}
+          hint={"Number of items in cache"}
+        />
+        <Block
+          title="Total Requests"
+          value={totalRequests}
+          units={standardUnits}
+          hint={"Total number of requests made"}
+        />
 
-      <Block
-        title="Fetched (Docs)"
-        value={
-          parseInt(findNested("document", "status", "fetched")?.value) || 0
-        }
-        units={standardUnits}
-        hint={"Number of unforced fetches"}
-      />
-      <Block
-        title="Forced (Docs)"
-        value={parseInt(findNested("document", "status", "forced")?.value) || 0}
-        hint={"Number of forced fetches"}
-      />
-      <Block
-        title="Errors"
-        value={parseInt(find("errors")?.metrics[0].value) || 0}
-        units={standardUnits}
-        hint={find("errors")?.help}
-      />
+        <Block
+          title="Fetched (Docs)"
+          value={
+            parseInt(findNested("document", "status", "fetched")?.value) || 0
+          }
+          units={standardUnits}
+          hint={"Number of unforced fetches"}
+        />
+        <Block
+          title="Forced (Docs)"
+          value={
+            parseInt(findNested("document", "status", "forced")?.value) || 0
+          }
+          hint={"Number of forced fetches"}
+        />
+        <Block
+          title="Errors"
+          value={parseInt(find("errors")?.metrics[0].value) || 0}
+          units={standardUnits}
+          hint={find("errors")?.help}
+        />
 
-      <Block
-        title="Virtual Memory"
-        value={parseInt(find("process_virtual_memory_bytes")?.metrics[0].value)}
-        hint={find("process_virtual_memory_bytes")?.help}
-        units={digitalUnits}
-      />
+        <Block
+          title="Virtual Memory"
+          value={parseInt(
+            find("process_virtual_memory_bytes")?.metrics[0].value
+          )}
+          hint={find("process_virtual_memory_bytes")?.help}
+          units={digitalUnits}
+        />
 
-      <Block
-        title="Total CPU Time"
-        value={secondsToHMS(
-          find("process_cpu_seconds_total")?.metrics[0].value || 0
-        )}
-        hint={find("process_cpu_seconds_total")?.help}
-      />
+        <Block
+          title="Total CPU Time"
+          value={secondsToHMS(
+            find("process_cpu_seconds_total")?.metrics[0].value || 0
+          )}
+          hint={find("process_cpu_seconds_total")?.help}
+        />
+        <Block
+          title="Moderation Requests"
+          value={
+            parseInt(findNested("moderation", "metric", "requests")?.value) || 0
+          }
+          units={standardUnits}
+          hint={"Number of unforced fetches"}
+        />
+      </div>
       <Block
         title="Api Response Time in Milliseconds"
         hint="Bar chart showing query responses grouped by response time"
@@ -247,11 +261,13 @@ const Metrics = () => {
           className="m-4"
         />
       </Block>
+
       <Block
         title="Requests Per Second"
         hint="Number of requests received per second for the last 5 minutes"
         className="h-auto"
       >
+        {console.log(reqsPerSec)}
         <LineGraph
           width={800}
           height={200}

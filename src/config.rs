@@ -7,6 +7,12 @@ use crate::{cache::CacheConfig, moderation::ModerationService};
 
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
+pub struct Cors {
+    pub origin: String,
+}
+
+#[derive(Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct Host {
     pub protocol: String,
     pub host: String,
@@ -41,6 +47,7 @@ pub struct ModerationConfig {
 #[allow(dead_code)]
 pub struct Configuration {
     pub ipfs: Host,
+    pub cors: Cors,
     pub workers: u16,
     pub bind_address: Ipv4Addr,
     pub port: u16,
