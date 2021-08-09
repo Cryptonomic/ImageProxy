@@ -170,19 +170,69 @@ const Metrics = () => {
           )}
           hint={find("process_start_time_seconds")?.help}
         />
+
+        <Block
+          title="Total CPU Time"
+          value={secondsToHMS(
+            find("process_cpu_seconds_total")?.metrics[0].value || 0
+          )}
+          hint={find("process_cpu_seconds_total")?.help}
+        />
+
+        <Block
+          title="Fetched Images"
+          value={
+            parseInt(findNested("document", "status", "fetched")?.value) || 0
+          }
+          units={standardUnits}
+          hint={"Number of unforced fetches"}
+        />
+        <Block
+          title="Forced Images"
+          value={
+            parseInt(findNested("document", "status", "forced")?.value) || 0
+          }
+          hint={"Number of forced fetches"}
+        />
+        <Block
+          title="Moderation Requests"
+          value={
+            parseInt(findNested("moderation", "metric", "requests")?.value) || 0
+          }
+          units={standardUnits}
+          hint={"Number of unforced fetches"}
+        />
+        <Block
+          title="Total Requests"
+          value={totalRequests}
+          units={standardUnits}
+          hint={"Total number of requests made"}
+        />
+
+        <Block
+          title="Errors"
+          value={parseInt(find("errors")?.metrics[0].value) || 0}
+          units={standardUnits}
+          hint={find("errors")?.help}
+        />
+
         <Block
           title="Cache Usage"
-          value={(
-            (findCache("mem_used_bytes")?.value /
-              findCache("mem_total_bytes")?.value) *
-            100
-          ).toFixed(3)}
-          units="%"
+          value={
+            findCache("mem_used_bytes")?.value
+              ? (
+                  (findCache("mem_used_bytes")?.value /
+                    findCache("mem_total_bytes")?.value) *
+                  100
+                ).toFixed(3)
+              : "No Cache"
+          }
+          units={findCache("mem_used_bytes") ? "%" : ""}
           hint={"Percentage of cache memory used"}
         />
         <Block
           title="Cache Mem"
-          value={parseInt(findCache("mem_total_bytes")?.value)}
+          value={parseInt(findCache("mem_total_bytes")?.value) || "No Cache"}
           units={digitalUnits}
           hint={"Total cache memory"}
         />
@@ -194,34 +244,26 @@ const Metrics = () => {
           hint={"Number of items in cache"}
         />
         <Block
-          title="Total Requests"
-          value={totalRequests}
+          title="Cache Hits"
+          value={parseInt(findCache("hits")?.value) || 0}
           units={standardUnits}
-          hint={"Total number of requests made"}
+          hint={"Number of times an item was found and retrieved from cache"}
         />
 
         <Block
-          title="Fetched (Docs)"
-          value={
-            parseInt(findNested("document", "status", "fetched")?.value) || 0
-          }
+          title="Cache Misses"
+          value={parseInt(findCache("misses")?.value) || 0}
           units={standardUnits}
-          hint={"Number of unforced fetches"}
+          hint={"Number of times an item was not found in cache"}
         />
         <Block
-          title="Forced (Docs)"
-          value={
-            parseInt(findNested("document", "status", "forced")?.value) || 0
-          }
-          hint={"Number of forced fetches"}
-        />
-        <Block
-          title="Errors"
-          value={parseInt(find("errors")?.metrics[0].value) || 0}
+          title="Cache Evictions"
+          value={parseInt(findCache("evictions")?.value) || 0}
           units={standardUnits}
-          hint={find("errors")?.help}
+          hint={
+            "Number of times an item was removed from cache to make space for other items"
+          }
         />
-
         <Block
           title="Virtual Memory"
           value={parseInt(
@@ -229,22 +271,6 @@ const Metrics = () => {
           )}
           hint={find("process_virtual_memory_bytes")?.help}
           units={digitalUnits}
-        />
-
-        <Block
-          title="Total CPU Time"
-          value={secondsToHMS(
-            find("process_cpu_seconds_total")?.metrics[0].value || 0
-          )}
-          hint={find("process_cpu_seconds_total")?.help}
-        />
-        <Block
-          title="Moderation Requests"
-          value={
-            parseInt(findNested("moderation", "metric", "requests")?.value) || 0
-          }
-          units={standardUnits}
-          hint={"Number of unforced fetches"}
         />
       </div>
       <Block
@@ -267,11 +293,10 @@ const Metrics = () => {
         hint="Number of requests received per second for the last 5 minutes"
         className="h-auto"
       >
-        {console.log(reqsPerSec)}
         <LineGraph
           width={800}
           height={200}
-          yAxisLabel="Requests per second"
+          yAxisLabel="Requests Per Second"
           data={[
             {
               label: "requests per second",
@@ -293,7 +318,7 @@ const Metrics = () => {
           yAxisLabel="Process Memory Usage"
           data={[
             {
-              label: "Bytes used",
+              label: "bytes used",
               color: "#FF7477",
               coords: memTimeSeries,
             },
