@@ -14,7 +14,7 @@ use crate::utils::sha256;
 use crate::{
     metrics,
     moderation::{ModerationService, SupportedMimeTypes},
-    proxy::Proxy,
+    proxy::Context,
     rpc::error::Errors,
 };
 
@@ -28,12 +28,12 @@ pub struct Methods;
 
 impl Methods {
     async fn fetch_document(
-        proxy: Arc<Proxy>,
+        ctx: Arc<Context>,
         req_id: &Uuid,
         url: &str,
     ) -> Result<Arc<Document>, Errors> {
         let cache_key = sha256(url.as_bytes());
-        let cached_doc = proxy
+        let cached_doc = ctx
             .cache
             .as_ref()
             .map(|cache| {
@@ -45,13 +45,13 @@ impl Methods {
         if let Some(doc) = cached_doc {
             Ok(doc)
         } else {
-            let document = Arc::new(proxy.http_client.fetch(req_id, url).await?);
+            let document = Arc::new(ctx.http_client.fetch(req_id, url).await?);
             if SupportedMimeTypes::from_string(&document.content_type)
                 == SupportedMimeTypes::Unsupported
             {
                 Err(Errors::UnsupportedImageType)
             } else {
-                if let Some(cache) = &proxy.cache {
+                if let Some(cache) = &ctx.cache {
                     debug!("Inserted document into cache, url:{}", url);
                     cache.put(cache_key, document.clone());
                 }
@@ -61,7 +61,7 @@ impl Methods {
     }
 
     pub async fn fetch(
-        proxy: Arc<Proxy>,
+        ctx: Arc<Context>,
         req_id: &Uuid,
         params: &FetchRequestParams,
     ) -> Result<Response<Body>, Errors> {
@@ -75,7 +75,7 @@ impl Methods {
         }
 
         let urls = vec![params.url.clone()];
-        let db_results = proxy
+        let db_results = ctx
             .database
             .get_moderation_result(&urls)
             .await
@@ -91,7 +91,7 @@ impl Methods {
                     req_id, result.blocked, result.categories, result.provider
                 );
                 let document = if !result.blocked || params.force {
-                    Some(Methods::fetch_document(proxy.clone(), req_id, &params.url).await?)
+                    Some(Methods::fetch_document(ctx.clone(), req_id, &params.url).await?)
                 } else {
                     None
                 };
@@ -100,9 +100,9 @@ impl Methods {
             None => {
                 metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
                 info!("No cached results found for id={}", req_id);
-                let document = Methods::fetch_document(proxy.clone(), req_id, &params.url).await?;
-                let max_document_size = proxy.moderation_provider.max_document_size();
-                let supported_types = proxy.moderation_provider.supported_types();
+                let document = Methods::fetch_document(ctx.clone(), req_id, &params.url).await?;
+                let max_document_size = ctx.moderation_provider.max_document_size();
+                let supported_types = ctx.moderation_provider.supported_types();
                 let document_type = SupportedMimeTypes::from_string(&document.content_type);
 
                 metrics::MODERATION.with_label_values(&["requests"]).inc();
@@ -112,9 +112,9 @@ impl Methods {
                     || !supported_types.contains(&document_type)
                 {
                     let resized_doc = document.resize_image(max_document_size)?;
-                    proxy.moderation_provider.moderate(&resized_doc).await?
+                    ctx.moderation_provider.moderate(&resized_doc).await?
                 } else {
-                    proxy.moderation_provider.moderate(&document).await?
+                    ctx.moderation_provider.moderate(&document).await?
                 };
 
                 metrics::TRAFFIC
@@ -129,7 +129,7 @@ impl Methods {
                 }
 
                 let categories = mod_response.categories.clone();
-                match proxy
+                match ctx
                     .database
                     .add_moderation_result(
                         &params.url,
@@ -158,7 +158,7 @@ impl Methods {
     }
 
     pub async fn describe(
-        proxy: Arc<Proxy>,
+        ctx: Arc<Context>,
         req_id: &Uuid,
         params: &DescribeRequestParams,
     ) -> Result<Response<Body>, Errors> {
@@ -166,7 +166,7 @@ impl Methods {
             "New describe request, id={}, urls={:?}",
             req_id, params.urls
         );
-        match proxy.database.get_moderation_result(&params.urls).await {
+        match ctx.database.get_moderation_result(&params.urls).await {
             Ok(results) => {
                 info!("Fetched results for id={}, rows={}", req_id, results.len());
                 let describe_results: Vec<DescribeResult> = params
@@ -208,12 +208,12 @@ impl Methods {
     }
 
     pub async fn report(
-        proxy: Arc<Proxy>,
+        ctx: Arc<Context>,
         req_id: &Uuid,
         params: &ReportRequestParams,
     ) -> Result<Response<Body>, Errors> {
         info!("New report request, id={}, url={}", req_id, params.url);
-        match proxy
+        match ctx
             .database
             .add_report(req_id, &params.url, &params.categories)
             .await
@@ -231,11 +231,11 @@ impl Methods {
     }
 
     pub async fn describe_report(
-        proxy: Arc<Proxy>,
+        ctx: Arc<Context>,
         req_id: &Uuid,
     ) -> Result<Response<Body>, Errors> {
         info!("New report describe request, id={}", req_id);
-        match proxy.database.get_reports().await {
+        match ctx.database.get_reports().await {
             Ok(rows) => {
                 let results: Vec<ReportDescribeResult> = rows
                     .iter()
