@@ -107,7 +107,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .unwrap_or_default()),
         (&Method::GET, "/info") => info(&proxy.config).await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
-        (&Method::GET, path) => {
+        (&Method::GET, path) if proxy.config.dashboard_enabled => {
             let file = Asset::get(&path[1..]);
             match file {
                 Some(f) => Ok(Response::builder()
@@ -178,13 +178,13 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
             hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
             &proxy.config.cors.origin,
         )
-        .body(Body::from(output.unwrap_or(String::default())))
-        .unwrap_or(
+        .body(Body::from(output.unwrap_or_default()))
+        .unwrap_or_else(|_| {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(String::default().into())
-                .unwrap_or_default(),
-        ))
+                .unwrap_or_default()
+        }))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {

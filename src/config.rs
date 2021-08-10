@@ -52,6 +52,7 @@ pub struct Configuration {
     pub bind_address: Ipv4Addr,
     pub port: u16,
     pub metrics_enabled: bool,
+    pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
     pub api_keys: Vec<String>,
     pub database: DatabaseConfig,
