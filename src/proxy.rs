@@ -177,19 +177,17 @@ async fn rpc(
                 match method {
                     RpcMethods::img_proxy_fetch => {
                         let params = decode::<FetchRequest>(&body)?;
-                        Methods::fetch(ctx, &req_id, &params.params).await
+                        fetch(ctx, &req_id, &params.params).await
                     }
                     RpcMethods::img_proxy_describe => {
                         let params = decode::<DescribeRequest>(&body)?;
-                        Methods::describe(ctx, &req_id, &params.params).await
+                        describe(ctx, &req_id, &params.params).await
                     }
                     RpcMethods::img_proxy_report => {
                         let params = decode::<ReportRequest>(&body)?;
-                        Methods::report(ctx, &req_id, &params.params).await
+                        report(ctx, &req_id, &params.params).await
                     }
-                    RpcMethods::img_proxy_describe_report => {
-                        Methods::describe_report(ctx, &req_id).await
-                    }
+                    RpcMethods::img_proxy_describe_report => describe_report(ctx, &req_id).await,
                 }
             }
             Ok(_) => Err(Errors::InvalidRpcVersionError),
