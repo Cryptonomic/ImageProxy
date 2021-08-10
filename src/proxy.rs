@@ -29,12 +29,16 @@ use chrono::Utc;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::error;
 use prometheus::Encoder;
+use rust_embed::RustEmbed;
 use serde::de;
 use serde_json;
 use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
-
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
+
+#[derive(RustEmbed)]
+#[folder = "dashboard-ui/build"]
+struct Asset;
 
 pub struct Proxy {
     pub config: Configuration,
@@ -101,8 +105,21 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::OK)
             .body(Body::default())
             .unwrap_or_default()),
-        (&Method::GET, "/info") => info().await,
+        (&Method::GET, "/info") => info(&proxy.config).await,
         (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
+        (&Method::GET, path) if proxy.config.dashboard_enabled => {
+            let file = Asset::get(&path[1..]);
+            match file {
+                Some(f) => Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from(f.data.into_owned()))
+                    .unwrap()),
+                None => Ok(Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::default())
+                    .unwrap_or_default()),
+            }
+        }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::default())
@@ -121,7 +138,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     })
 }
 
-async fn info() -> Result<Response<Body>, GenericError> {
+async fn info(config: &Configuration) -> Result<Response<Body>, GenericError> {
     let info = Info {
         package_version: built_info::PKG_VERSION,
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
@@ -130,6 +147,10 @@ async fn info() -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
+        .header(
+            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            &config.cors.origin,
+        )
         .body(Body::from(result))
         .unwrap_or_default())
 }
@@ -152,7 +173,18 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
 
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
-    Ok(Response::new(Body::from(output.unwrap_or_default())))
+    Ok(Response::builder()
+        .header(
+            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            &proxy.config.cors.origin,
+        )
+        .body(Body::from(output.unwrap_or_default()))
+        .unwrap_or_else(|_| {
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(String::default().into())
+                .unwrap_or_default()
+        }))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {

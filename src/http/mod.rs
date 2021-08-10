@@ -148,15 +148,18 @@ impl HttpClient {
                     e => {
                         metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                         error!(
-                            "Unable to fetch document, id={}, response_code={}",
-                            req_id, e
+                            "Unable to fetch document, id={}, response_code={}, url={}",
+                            req_id, e, url
                         );
                         Err(Errors::FetchFailed)
                     }
                 },
                 Err(e) => {
                     metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
-                    error!("Unable to fetch document, id={}, reason={}", req_id, e);
+                    error!(
+                        "Unable to fetch document, id={}, reason={}, url={}",
+                        req_id, e, url
+                    );
                     Err(Errors::FetchFailed)
                 }
             },
