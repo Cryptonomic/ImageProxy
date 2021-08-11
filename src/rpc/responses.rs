@@ -10,6 +10,7 @@ use super::{
     requests::ResponseType,
 };
 use crate::{
+    config::Configuration,
     document::Document,
     metrics,
     moderation::{ModerationCategories, ModerationService},

@@ -176,7 +176,7 @@ async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .header(
             hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-            &proxy.config.cors.origin,
+            &ctx.config.cors.origin,
         )
         .body(Body::from(output.unwrap_or_default()))
         .unwrap_or_else(|_| {
