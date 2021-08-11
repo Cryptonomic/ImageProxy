@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use super::responses::*;
 use super::VERSION;
+use crate::config::Configuration;
 
 #[derive(Serialize)]
 pub struct RpcError {
@@ -52,7 +53,7 @@ impl Errors {
         }
     }
 
-    pub fn to_response(&self, request_id: &Uuid) -> Response<Body> {
+    pub fn to_response(&self, request_id: &Uuid, config: &Configuration) -> Response<Body> {
         let error = self.to_rpc_error(request_id);
 
         let body = serde_json::to_string_pretty(&ErrorResponse {
@@ -64,6 +65,10 @@ impl Errors {
         Response::builder()
             .status(hyper::StatusCode::OK)
             .header(hyper::header::CONTENT_TYPE, "application/json")
+            .header(
+                hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                &config.cors.origin,
+            )
             .body(Body::from(body))
             .unwrap_or_default()
     }

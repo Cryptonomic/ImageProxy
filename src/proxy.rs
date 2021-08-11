@@ -85,14 +85,14 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     metrics::HITS.inc();
     metrics::ACTIVE_CLIENTS.inc();
     let response_time_start = Utc::now().timestamp_millis();
-
+    let proxy_config = proxy.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
                 let req_id = Uuid::new_v4();
                 rpc(proxy, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
-                    Ok(e.to_response(&req_id))
+                    Ok(e.to_response(&req_id, &proxy_config))
                 })
             } else {
                 Ok(Response::builder()
@@ -112,16 +112,28 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             match file {
                 Some(f) => Ok(Response::builder()
                     .status(StatusCode::OK)
+                    .header(
+                        hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                        &proxy.config.cors.origin.to_owned(),
+                    )
                     .body(Body::from(f.data.into_owned()))
                     .unwrap()),
                 None => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
+                    .header(
+                        hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                        &proxy.config.cors.origin.to_owned(),
+                    )
                     .body(Body::default())
                     .unwrap_or_default()),
             }
         }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
+            .header(
+                hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                &proxy.config.cors.origin.to_owned(),
+            )
             .body(Body::default())
             .unwrap_or_default()),
     };
@@ -134,7 +146,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
     response.or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(Errors::InternalError.to_response(&Uuid::new_v4()))
+        Ok(Errors::InternalError.to_response(&Uuid::new_v4(), &proxy_config))
     })
 }
 

@@ -103,6 +103,7 @@ const Metrics = () => {
 
   const update = () =>
     getMetrics().then((d) => {
+      console.log(d);
       if (d === 400) {
         setMetrics(undefined);
       } else {
