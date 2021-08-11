@@ -132,7 +132,7 @@ impl FetchResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id, &config)
+                Errors::InternalError.to_response(req_id, config)
             }
         }
     }
