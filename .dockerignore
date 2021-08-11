@@ -5,6 +5,8 @@ docker-compose.yml
 Dockerfile
 README.md
 LICENSE
+dashboard-ui/node_modules
+dashboard-ui/build
 proxy.conf
 log4rs.yml
 .env
