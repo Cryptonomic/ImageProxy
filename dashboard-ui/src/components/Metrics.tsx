@@ -9,6 +9,7 @@ import {
   findApiResponseTimeMetrics,
   secondsToHMS,
 } from "../utils/ImageProxy";
+import NotFound from "./NotFound";
 import info from "../images/information.png";
 import LineGraph from "./LineGraph";
 import BarChart from "./BarChart";
@@ -68,7 +69,7 @@ const Block: React.FC<{
 };
 
 const Metrics = () => {
-  const [metrics, setMetrics] = useState<any[]>();
+  const [metrics, setMetrics] = useState<any[] | undefined | null>();
   const [totalRequests, setTotalRequests] = useState(0);
   const [reqsPerSec, setReqsPerSec] = useState<[number, number][]>(
     new Array(60).fill([0, 0])
@@ -102,54 +103,60 @@ const Metrics = () => {
 
   const update = () =>
     getMetrics().then((d) => {
-      setMetrics(d);
-      const currSumRequests =
-        findApiMetrics(d, "img_proxy_fetch") +
-        findApiMetrics(d, "img_proxy_describe") +
-        findApiMetrics(d, "img_proxy_report") +
-        findApiMetrics(d, "img_proxy_describe_report");
-      const currResMem = find("process_resident_memory_bytes")?.metrics[0]
-        .value;
-      const currTrafficFetched = findNested(
-        "traffic",
-        "metric",
-        "fetched"
-      )?.value;
-      const currTrafficServed = findNested(
-        "traffic",
-        "metric",
-        "served"
-      )?.value;
-      if (trafficFetched && trafficFetched !== 0) {
-        trafficFetchedPerSec.shift();
-        trafficFetchedPerSec.push([
-          Date.now(),
-          (currTrafficFetched - trafficFetched) / 5,
-        ]);
-        setTrafficFetchedPerSec(trafficFetchedPerSec);
+      switch(d) {
+        case 404: setMetrics(undefined); break;
+        case 400: setMetrics(null); break;
+        default:
+          setMetrics(d);
+          const currSumRequests =
+            findApiMetrics(d, "img_proxy_fetch") +
+            findApiMetrics(d, "img_proxy_describe") +
+            findApiMetrics(d, "img_proxy_report") +
+            findApiMetrics(d, "img_proxy_describe_report");
+          const currResMem = find("process_resident_memory_bytes")?.metrics[0]
+            .value;
+          const currTrafficFetched = findNested(
+            "traffic",
+            "metric",
+            "fetched"
+          )?.value;
+          const currTrafficServed = findNested(
+            "traffic",
+            "metric",
+            "served"
+          )?.value;
+          if (trafficFetched && trafficFetched !== 0) {
+            trafficFetchedPerSec.shift();
+            trafficFetchedPerSec.push([
+              Date.now(),
+              (currTrafficFetched - trafficFetched) / 5,
+            ]);
+            setTrafficFetchedPerSec(trafficFetchedPerSec);
+          }
+          if (trafficServed && trafficServed !== 0) {
+            trafficServedPerSec.shift();
+            trafficServedPerSec.push([
+              Date.now(),
+              (currTrafficServed - trafficServed) / 5,
+            ]);
+            setTrafficServedPerSec(trafficServedPerSec);
+          }
+          if (totalRequests !== 0) {
+            reqsPerSec.shift();
+            reqsPerSec.push([Date.now(), (currSumRequests - totalRequests) / 5]);
+            setReqsPerSec(reqsPerSec);
+          }
+          if (currResMem) {
+            memTimeSeries.shift();
+            memTimeSeries.push([Date.now(), parseInt(currResMem)]);
+          }
+          setTrafficFetched(currTrafficFetched);
+          setTrafficServed(currTrafficServed);
+          setMemTimeSeries(memTimeSeries);
+          setTotalRequests(currSumRequests);
+        break;
       }
-      if (trafficServed && trafficServed !== 0) {
-        trafficServedPerSec.shift();
-        trafficServedPerSec.push([
-          Date.now(),
-          (currTrafficServed - trafficServed) / 5,
-        ]);
-        setTrafficServedPerSec(trafficServedPerSec);
-      }
-      if (totalRequests !== 0) {
-        reqsPerSec.shift();
-        reqsPerSec.push([Date.now(), (currSumRequests - totalRequests) / 5]);
-        setReqsPerSec(reqsPerSec);
-      }
-      if (currResMem) {
-        memTimeSeries.shift();
-        memTimeSeries.push([Date.now(), parseInt(currResMem)]);
-      }
-      setTrafficFetched(currTrafficFetched);
-      setTrafficServed(currTrafficServed);
-      setMemTimeSeries(memTimeSeries);
-      setTotalRequests(currSumRequests);
-    });
+    })
   /* update(); */
   useEffect(() => {
     update();
@@ -157,201 +164,206 @@ const Metrics = () => {
   useInterval(() => {
     update();
   }, 5000);
-  return (
-    <div className="w-full h-full flex flex-wrap content-start justify-center">
-      <div className="flex flex-wrap justify-center">
+  return (    
+  <div className="w-full h-full flex flex-wrap content-start justify-center">
+      {metrics === undefined && <NotFound/>}
+      {metrics === null && <> Image Proxy is down</>}
+      {metrics && 
+      <>
+        <div className="flex flex-wrap justify-center">
+          <Block
+            title="Uptime"
+            value={secondsToHMS(
+              find("process_start_time_seconds")
+                ? ((Date.now() / 1e3) as number) -
+                    find("process_start_time_seconds")?.metrics[0].value
+                : 0
+            )}
+            hint={find("process_start_time_seconds")?.help || "Uptime metric is only available on linux"}
+          />
+
+          <Block
+            title="Total CPU Time"
+            value={secondsToHMS(
+              find("process_cpu_seconds_total")?.metrics[0].value || 0
+            )}
+            hint={find("process_cpu_seconds_total")?.help || "Total CPU time metric is only available on linux"}
+          />
+
+          <Block
+            title="Fetched Images"
+            value={
+              parseInt(findNested("document", "status", "fetched")?.value) || 0
+            }
+            units={standardUnits}
+            hint={"Number of unforced fetches"}
+          />
+          <Block
+            title="Forced Images"
+            value={
+              parseInt(findNested("document", "status", "forced")?.value) || 0
+            }
+            hint={"Number of forced fetches"}
+          />
+          <Block
+            title="Moderation Requests"
+            value={
+              parseInt(findNested("moderation", "metric", "requests")?.value) || 0
+            }
+            units={standardUnits}
+            hint={"Number of unforced fetches"}
+          />
+          <Block
+            title="Total Requests"
+            value={totalRequests}
+            units={standardUnits}
+            hint={"Total number of requests made"}
+          />
+
+          <Block
+            title="Errors"
+            value={parseInt(find("errors")?.metrics[0].value) || 0}
+            units={standardUnits}
+            hint={find("errors")?.help}
+          />
+
+          <Block
+            title="Cache Usage"
+            value={
+              findCache("mem_used_bytes")?.value
+                ? (
+                    (findCache("mem_used_bytes")?.value /
+                      findCache("mem_total_bytes")?.value) *
+                    100
+                  ).toFixed(3)
+                : "No Cache"
+            }
+            units={findCache("mem_used_bytes") ? "%" : ""}
+            hint={"Percentage of cache memory used"}
+          />
+          <Block
+            title="Cache Mem"
+            value={parseInt(findCache("mem_total_bytes")?.value) || "No Cache"}
+            units={digitalUnits}
+            hint={"Total cache memory"}
+          />
+
+          <Block
+            title="Cached Documents"
+            value={parseInt(findCache("items")?.value) || 0}
+            units={standardUnits}
+            hint={"Number of items in cache"}
+          />
+          <Block
+            title="Cache Hits"
+            value={parseInt(findCache("hits")?.value) || 0}
+            units={standardUnits}
+            hint={"Number of times an item was found and retrieved from cache"}
+          />
+
+          <Block
+            title="Cache Misses"
+            value={parseInt(findCache("misses")?.value) || 0}
+            units={standardUnits}
+            hint={"Number of times an item was not found in cache"}
+          />
+          <Block
+            title="Cache Evictions"
+            value={parseInt(findCache("evictions")?.value) || 0}
+            units={standardUnits}
+            hint={
+              "Number of times an item was removed from cache to make space for other items"
+            }
+          />
+          <Block
+            title="Virtual Memory"
+            value={parseInt(
+              find("process_virtual_memory_bytes")?.metrics[0].value
+            ) || "Not available"}
+            hint={find("process_virtual_memory_bytes")?.help || "Virtual memory monitoring is only available on linux"}
+            units={digitalUnits}
+          />
+        </div>
         <Block
-          title="Uptime"
-          value={secondsToHMS(
-            find("process_start_time_seconds")
-              ? ((Date.now() / 1e3) as number) -
-                  find("process_start_time_seconds")?.metrics[0].value
-              : 0
-          )}
-          hint={find("process_start_time_seconds")?.help}
-        />
+          title="Api Response Time in Milliseconds"
+          hint="Bar chart showing query responses grouped by response time"
+          className="h-auto"
+        >
+          <BarChart
+            width={800}
+            height={200}
+            xAxisLabel="Response Time (ms)"
+            yAxisLabel="Number of Responses"
+            data={metrics ? findApiResponseTimeMetrics(metrics) : []}
+            className="m-4"
+          />
+        </Block>
 
         <Block
-          title="Total CPU Time"
-          value={secondsToHMS(
-            find("process_cpu_seconds_total")?.metrics[0].value || 0
-          )}
-          hint={find("process_cpu_seconds_total")?.help}
-        />
+          title="Requests Per Second"
+          hint="Number of requests received per second for the last 5 minutes"
+          className="h-auto"
+        >
+          <LineGraph
+            width={800}
+            height={200}
+            yAxisLabel="Requests Per Second"
+            data={[
+              {
+                label: "requests per second",
+                color: "#FF7477",
+                coords: reqsPerSec,
+              },
+            ]}
+            className="m-4"
+          />
+        </Block>
+        <Block
+          title="Process Memory"
+          hint="Resident process memory being used over time"
+          className="h-auto"
+        >
+          <LineGraph
+            width={800}
+            height={200}
+            yAxisLabel="Process Memory Usage"
+            data={[
+              {
+                label: "bytes used",
+                color: "#FF7477",
+                coords: memTimeSeries,
+              },
+            ]}
+            className="m-4"
+          />
+        </Block>
 
         <Block
-          title="Fetched Images"
-          value={
-            parseInt(findNested("document", "status", "fetched")?.value) || 0
-          }
-          units={standardUnits}
-          hint={"Number of unforced fetches"}
-        />
-        <Block
-          title="Forced Images"
-          value={
-            parseInt(findNested("document", "status", "forced")?.value) || 0
-          }
-          hint={"Number of forced fetches"}
-        />
-        <Block
-          title="Moderation Requests"
-          value={
-            parseInt(findNested("moderation", "metric", "requests")?.value) || 0
-          }
-          units={standardUnits}
-          hint={"Number of unforced fetches"}
-        />
-        <Block
-          title="Total Requests"
-          value={totalRequests}
-          units={standardUnits}
-          hint={"Total number of requests made"}
-        />
-
-        <Block
-          title="Errors"
-          value={parseInt(find("errors")?.metrics[0].value) || 0}
-          units={standardUnits}
-          hint={find("errors")?.help}
-        />
-
-        <Block
-          title="Cache Usage"
-          value={
-            findCache("mem_used_bytes")?.value
-              ? (
-                  (findCache("mem_used_bytes")?.value /
-                    findCache("mem_total_bytes")?.value) *
-                  100
-                ).toFixed(3)
-              : "No Cache"
-          }
-          units={findCache("mem_used_bytes") ? "%" : ""}
-          hint={"Percentage of cache memory used"}
-        />
-        <Block
-          title="Cache Mem"
-          value={parseInt(findCache("mem_total_bytes")?.value) || "No Cache"}
-          units={digitalUnits}
-          hint={"Total cache memory"}
-        />
-
-        <Block
-          title="Cached Documents"
-          value={parseInt(findCache("items")?.value) || 0}
-          units={standardUnits}
-          hint={"Number of items in cache"}
-        />
-        <Block
-          title="Cache Hits"
-          value={parseInt(findCache("hits")?.value) || 0}
-          units={standardUnits}
-          hint={"Number of times an item was found and retrieved from cache"}
-        />
-
-        <Block
-          title="Cache Misses"
-          value={parseInt(findCache("misses")?.value) || 0}
-          units={standardUnits}
-          hint={"Number of times an item was not found in cache"}
-        />
-        <Block
-          title="Cache Evictions"
-          value={parseInt(findCache("evictions")?.value) || 0}
-          units={standardUnits}
-          hint={
-            "Number of times an item was removed from cache to make space for other items"
-          }
-        />
-        <Block
-          title="Virtual Memory"
-          value={parseInt(
-            find("process_virtual_memory_bytes")?.metrics[0].value
-          )}
-          hint={find("process_virtual_memory_bytes")?.help}
-          units={digitalUnits}
-        />
+          title="Traffic"
+          hint="Amount of data sent/recieved per second"
+          className="h-auto"
+        >
+          <LineGraph
+            width={800}
+            height={200}
+            yAxisLabel="Traffic Per Second"
+            data={[
+              {
+                label: "bytes fetched per second",
+                color: "#FF7477",
+                coords: trafficFetchedPerSec,
+              },
+              {
+                label: "bytes served per second",
+                color: "#47f9ff",
+                coords: trafficServedPerSec,
+              },
+            ]}
+            className="m-4"
+          />
+        </Block>
+        </>}
       </div>
-      <Block
-        title="Api Response Time in Milliseconds"
-        hint="Bar chart showing query responses grouped by response time"
-        className="h-auto"
-      >
-        <BarChart
-          width={800}
-          height={200}
-          xAxisLabel="Response Time (ms)"
-          yAxisLabel="Number of Responses"
-          data={metrics ? findApiResponseTimeMetrics(metrics) : []}
-          className="m-4"
-        />
-      </Block>
-
-      <Block
-        title="Requests Per Second"
-        hint="Number of requests received per second for the last 5 minutes"
-        className="h-auto"
-      >
-        <LineGraph
-          width={800}
-          height={200}
-          yAxisLabel="Requests Per Second"
-          data={[
-            {
-              label: "requests per second",
-              color: "#FF7477",
-              coords: reqsPerSec,
-            },
-          ]}
-          className="m-4"
-        />
-      </Block>
-      <Block
-        title="Process Memory"
-        hint="Resident process memory being used over time"
-        className="h-auto"
-      >
-        <LineGraph
-          width={800}
-          height={200}
-          yAxisLabel="Process Memory Usage"
-          data={[
-            {
-              label: "bytes used",
-              color: "#FF7477",
-              coords: memTimeSeries,
-            },
-          ]}
-          className="m-4"
-        />
-      </Block>
-
-      <Block
-        title="Traffic"
-        hint="Amount of data sent/recieved per second"
-        className="h-auto"
-      >
-        <LineGraph
-          width={800}
-          height={200}
-          yAxisLabel="Traffic Per Second"
-          data={[
-            {
-              label: "bytes fetched per second",
-              color: "#FF7477",
-              coords: trafficFetchedPerSec,
-            },
-            {
-              label: "bytes served per second",
-              color: "#47f9ff",
-              coords: trafficServedPerSec,
-            },
-          ]}
-          className="m-4"
-        />
-      </Block>
-    </div>
   );
 };
 
