@@ -18,6 +18,7 @@ export const getInfo = async (): Promise<BuildInfo> => {
 export const getMetrics = async () => {
   return fetch(`${proxyURL}/metrics`)
     .then((d) => {
+      if (!d.ok) return 400;
       return d.text().then((raw) => parsePrometheusTextFormat(raw));
     })
     .catch((e) => {
