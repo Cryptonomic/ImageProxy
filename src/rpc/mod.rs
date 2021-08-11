@@ -69,7 +69,7 @@ impl Methods {
             let document_type = SupportedMimeTypes::from_string(&document.content_type);
 
             if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id));
+                return Ok(Errors::UnsupportedImageType.to_response(req_id, &proxy.config));
             }
             metrics::TRAFFIC
                 .with_label_values(&["served"])
@@ -81,6 +81,7 @@ impl Methods {
                     ModerationStatus::Allowed,
                     Vec::new(),
                     Some(document.to_url()),
+                    &proxy.config,
                     req_id,
                 )),
             };
@@ -115,6 +116,7 @@ impl Methods {
                     ModerationStatus::Blocked,
                     r.categories.clone(),
                     None,
+                    &proxy.config,
                     req_id,
                 ))
             } else {
@@ -129,6 +131,7 @@ impl Methods {
                         ModerationStatus::Allowed,
                         Vec::new(),
                         Some(document.to_url()),
+                        &proxy.config,
                         req_id,
                     )),
                 }
@@ -142,7 +145,7 @@ impl Methods {
 
             let document_type = SupportedMimeTypes::from_string(&document.content_type);
             if document_type == SupportedMimeTypes::Unsupported {
-                return Ok(Errors::UnsupportedImageType.to_response(req_id));
+                return Ok(Errors::UnsupportedImageType.to_response(req_id, &proxy.config));
             }
 
             let max_document_size = proxy.moderation_provider.max_document_size();
@@ -186,6 +189,7 @@ impl Methods {
                             ModerationStatus::Blocked,
                             mr.categories.clone(),
                             None,
+                            &proxy.config,
                             req_id,
                         ))
                     } else {
@@ -199,12 +203,13 @@ impl Methods {
                                 ModerationStatus::Allowed,
                                 Vec::new(),
                                 Some(document.to_url()),
+                                &proxy.config,
                                 req_id,
                             )),
                         }
                     }
                 }
-                Err(e) => Ok(e.to_response(req_id)),
+                Err(e) => Ok(e.to_response(req_id, &proxy.config)),
             }
         }
     }
