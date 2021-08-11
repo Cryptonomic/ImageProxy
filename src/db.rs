@@ -1,4 +1,3 @@
-extern crate crypto;
 use std::time::Duration;
 
 use crate::{
