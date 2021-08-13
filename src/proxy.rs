@@ -85,7 +85,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     metrics::HITS.inc();
     metrics::ACTIVE_CLIENTS.inc();
     let response_time_start = Utc::now().timestamp_millis();
-    let proxy_config = proxy.config.clone();
+    let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&ctx.config.api_keys.clone(), req.borrow()) {
@@ -114,7 +114,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
                     .status(StatusCode::OK)
                     .header(
                         hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &proxy.config.cors.origin.to_owned(),
+                        &ctx.config.cors.origin.to_owned(),
                     )
                     .body(Body::from(f.data.into_owned()))
                     .unwrap()),
@@ -122,7 +122,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
                     .status(StatusCode::NOT_FOUND)
                     .header(
                         hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &proxy.config.cors.origin.to_owned(),
+                        &ctx.config.cors.origin.to_owned(),
                     )
                     .body(Body::default())
                     .unwrap_or_default()),
@@ -132,7 +132,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::NOT_FOUND)
             .header(
                 hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                &proxy.config.cors.origin.to_owned(),
+                &ctx.config.cors.origin.to_owned(),
             )
             .body(Body::default())
             .unwrap_or_default()),

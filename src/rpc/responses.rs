@@ -129,10 +129,11 @@ impl FetchResponse {
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
         req_id: &Uuid,
+        config: &Configuration,
     ) -> Response<Body> {
         match response_type {
             ResponseType::Raw => document.map_or_else(
-                || Errors::InternalError.to_response(req_id),
+                || Errors::InternalError.to_response(req_id, config),
                 |doc| {
                     metrics::TRAFFIC
                         .with_label_values(&["served"])
@@ -167,7 +168,7 @@ impl FetchResponse {
                         .unwrap_or_default(),
                     Err(e) => {
                         error!("Error serializing fetch response, reason={}", e);
-                        Errors::InternalError.to_response(req_id)
+                        Errors::InternalError.to_response(req_id, config)
                     }
                 }
             }

@@ -151,6 +151,7 @@ pub async fn fetch(
         moderation_status,
         categories,
         req_id,
+        &ctx.config,
     ))
 }
 
