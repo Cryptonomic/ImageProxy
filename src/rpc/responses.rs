@@ -200,7 +200,7 @@ impl DescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id)
+                Errors::InternalError.to_response(req_id, config)
             }
         }
     }
@@ -234,7 +234,7 @@ impl ReportResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id)
+                Errors::InternalError.to_response(req_id, config)
             }
         }
     }
@@ -265,7 +265,7 @@ impl ReportDescribeResponse {
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id)
+                Errors::InternalError.to_response(req_id, config)
             }
         }
     }

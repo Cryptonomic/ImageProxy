@@ -16,9 +16,14 @@ export const getInfo = async (): Promise<BuildInfo> => {
 };
 
 export const getMetrics = async () => {
-  return fetch(`${proxyURL}/metrics`).then((d) =>
-    d.text().then((raw) => parsePrometheusTextFormat(raw))
-  );
+  return fetch(`${proxyURL}/metrics`)
+    .then((d) => {
+      if (!d.ok) return 400;
+      return d.text().then((raw) => parsePrometheusTextFormat(raw));
+    })
+    .catch((e) => {
+      return 400;
+    });
 };
 
 export const findMetric = (arr: any, name: string, label = "name") =>
@@ -64,6 +69,7 @@ export const secondsToHMS = (d: number) => {
   const m = Math.floor((d % 3600) / 60);
   const s = (d % 3600) % 60;
 
+  if (d === 0) return "Not available";
   const hDisplay = h > 0 ? h + (h === 1 ? " hr, " : " hrs, ") : "";
   const mDisplay = m > 0 ? m + (m === 1 ? " min, " : " mins, ") : "";
   const sDisplay = s > 0 ? s.toFixed(3) + (s === 1 ? " sec" : " secs") : "";

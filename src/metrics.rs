@@ -1,6 +1,7 @@
 extern crate prometheus;
 
 use lazy_static::lazy_static;
+#[cfg(not(target_os = "macos"))]
 use prometheus::process_collector::ProcessCollector;
 use prometheus::{
     HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
@@ -81,6 +82,9 @@ pub fn init_registry() {
         .register(Box::new(URI_FILTER_BLOCKED.clone()))
         .unwrap();
 
+    
+    #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();
+    #[cfg(not(target_os = "macos"))]
     REGISTRY.register(Box::new(pc)).unwrap();
 }
