@@ -11,7 +11,7 @@
     "build": "tsc",
     "test": "ts-mocha --timeout 60000 --recursive -p ./tsconfig.json tests/**/*.test.ts",
     "docs": "npx typedoc",
-    "docs:watch": "npx typedoc --watch"
+    "watch:docs": "npx typedoc --watch"
   },
   "repository": {
     "type": "git",
