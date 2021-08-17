@@ -1,11 +1,18 @@
+use std::sync::Arc;
+
 use hyper::{Body, Response};
 use log::error;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::error::{Errors, RpcError};
+use super::{
+    error::{Errors, RpcError},
+    requests::ResponseType,
+};
 use crate::{
     config::Configuration,
+    document::Document,
+    metrics,
     moderation::{ModerationCategories, ModerationService},
 };
 
@@ -17,10 +24,20 @@ pub enum RpcStatus {
     Err,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub enum ModerationStatus {
     Allowed,
     Blocked,
+}
+
+impl From<bool> for ModerationStatus {
+    fn from(s: bool) -> Self {
+        if s {
+            ModerationStatus::Allowed
+        } else {
+            ModerationStatus::Blocked
+        }
+    }
 }
 
 #[derive(Default, Serialize)]
@@ -107,32 +124,53 @@ pub struct ServerError {
 
 impl FetchResponse {
     pub fn to_response(
-        rpc_status: RpcStatus,
+        response_type: &ResponseType,
+        document: Option<Arc<Document>>,
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
-        data: Option<String>,
-        config: &Configuration,
         req_id: &Uuid,
+        config: &Configuration,
     ) -> Response<Body> {
-        let result = FetchResponse {
-            jsonrpc: String::from(VERSION),
-            rpc_status,
-            result: ModerationResult {
-                moderation_status,
-                categories,
-                data: data.unwrap_or_default(),
-            },
-        };
+        match response_type {
+            ResponseType::Raw => document.map_or_else(
+                || Errors::InternalError.to_response(req_id, config),
+                |doc| {
+                    metrics::TRAFFIC
+                        .with_label_values(&["served"])
+                        .inc_by(doc.bytes.len() as u64);
+                    Response::builder()
+                        .status(200)
+                        .header(hyper::header::CONTENT_TYPE, doc.content_type.clone())
+                        .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
+                        .body(Body::from(doc.bytes.clone()))
+                        .unwrap_or_default()
+                },
+            ),
+            ResponseType::Json => {
+                let result = FetchResponse {
+                    jsonrpc: String::from(VERSION),
+                    rpc_status: RpcStatus::Ok,
+                    result: ModerationResult {
+                        moderation_status,
+                        categories,
+                        data: document.map(|doc| doc.to_url()).unwrap_or_default(),
+                    },
+                };
+                metrics::TRAFFIC
+                    .with_label_values(&["served"])
+                    .inc_by(result.result.data.len() as u64);
 
-        match serde_json::to_string_pretty(&result) {
-            Ok(body) => Response::builder()
-                .status(hyper::StatusCode::OK)
-                .header(hyper::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body))
-                .unwrap_or_default(),
-            Err(e) => {
-                error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id, config)
+                match serde_json::to_string_pretty(&result) {
+                    Ok(body) => Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .header(hyper::header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(body))
+                        .unwrap_or_default(),
+                    Err(e) => {
+                        error!("Error serializing fetch response, reason={}", e);
+                        Errors::InternalError.to_response(req_id, config)
+                    }
+                }
             }
         }
     }

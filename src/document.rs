@@ -8,7 +8,7 @@ use crate::moderation::SupportedMimeTypes;
 use crate::rpc::error::Errors;
 
 use base64::encode;
-use hyper::{body::Bytes, Body, Response};
+use hyper::body::Bytes;
 
 use image::DynamicImage;
 use image::ImageFormat;
@@ -47,11 +47,8 @@ impl Document {
         })
     }
 
-    pub fn resize_image(
-        &self,
-        image_type: SupportedMimeTypes,
-        max_size: u64,
-    ) -> Result<Document, Errors> {
+    pub fn resize_image(&self, max_size: u64) -> Result<Document, Errors> {
+        let image_type = SupportedMimeTypes::from_string(&self.content_type);
         let img = self.load_image(image_type)?;
         let (x_dim, y_dim) = img.dimensions();
         let scale = self.bytes.len() as f64 / max_size as f64;
@@ -77,15 +74,6 @@ impl Document {
                 Err(Errors::InternalError)
             }
         }
-    }
-
-    pub fn to_response(&self) -> Response<Body> {
-        Response::builder()
-            .status(200)
-            .header(hyper::header::CONTENT_TYPE, self.content_type.clone())
-            .header(hyper::header::CONTENT_LENGTH, self.bytes.len())
-            .body(Body::from(self.bytes.clone()))
-            .unwrap_or_default()
     }
 
     pub fn to_url(&self) -> String {

@@ -1,26 +1,24 @@
-extern crate base64;
-extern crate crypto;
-
 mod messages;
 mod util;
 
 use async_trait::async_trait;
+use base64;
 use chrono::prelude::*;
-use hyper::Client;
-use hyper::{Body, Method, Request};
+use hex;
+use hyper::{Body, Client, Method, Request};
 use hyper_tls::HttpsConnector;
 use log::{debug, error};
-use rustc_serialize::hex::ToHex;
 use serde_json::json;
 use std::env;
 
 use messages::RekognitionResponse;
-use util::{get_signature_key, hash, sign};
+use util::{get_signature_key, sign};
 
 use crate::{
     document::Document,
     moderation::{ModerationProvider, ModerationResponse, ModerationService, SupportedMimeTypes},
     rpc::error::Errors,
+    utils::sha256,
 };
 
 pub struct Rekognition {
@@ -102,7 +100,7 @@ impl Rekognition {
             "MinConfidence": 50.0,
         });
         let request_dict_encoded = request_dict.to_string();
-        let payload_hash = hash(&request_dict_encoded.to_string());
+        let payload_hash = sha256(request_dict_encoded.as_bytes());
         let canonical_request = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
             "POST",
@@ -118,7 +116,7 @@ impl Rekognition {
             algorithm,
             amz_date,
             credential_scope,
-            hash(&canonical_request)
+            sha256(canonical_request.as_bytes())
         );
         let signing_key =
             get_signature_key(&self.secret_key, &date_stamp[..], &self.region, service);
@@ -129,7 +127,7 @@ impl Rekognition {
             self.access_key,
             credential_scope,
             signed_headers,
-            signature.to_hex()
+            hex::encode(signature)
         );
         let req = Request::builder()
             .method(Method::POST)
