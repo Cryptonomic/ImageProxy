@@ -31,7 +31,7 @@ use tokio::runtime::Builder as TokioBuilder;
 use crate::{
     config::Configuration,
     logging::logging_init,
-    proxy::{route, Proxy},
+    proxy::{route, Context},
 };
 use crate::{metrics::init_registry, utils::print_banner};
 
@@ -39,8 +39,9 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-pub async fn run(config: &Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let proxy = Arc::new(Proxy::new(config).await?);
+pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
+    let proxy = Arc::new(Context::new(config).await?);
     let service = make_service_fn(move |_| {
         let proxy = proxy.clone();
         async move {
@@ -51,7 +52,6 @@ pub async fn run(config: &Configuration) -> Result<(), Box<dyn std::error::Error
         }
     });
 
-    let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
     let server = Server::bind(&addr).serve(service);
     info!("Proxy online. Listening on http://{}", addr);
     server.await?;
@@ -84,5 +84,5 @@ fn main() {
     init_registry();
 
     info!("Starting proxy server");
-    runtime.block_on(run(&config)).unwrap();
+    runtime.block_on(run(config)).unwrap();
 }

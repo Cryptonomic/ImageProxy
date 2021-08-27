@@ -41,7 +41,7 @@ type GenericError = Box<dyn std::error::Error + Send + Sync>;
 #[folder = "dashboard-ui/build"]
 struct Asset;
 
-pub struct Proxy {
+pub struct Context {
     pub config: Configuration,
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
@@ -49,17 +49,22 @@ pub struct Proxy {
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
 }
 
-impl Proxy {
-    pub async fn new(config: &Configuration) -> Result<Proxy, GenericError> {
+impl Context {
+    pub async fn new(config: Configuration) -> Result<Context, GenericError> {
         let database = Database::new(&config.database).await?;
-        let moderation_provider = ModerationService::get_provider(config)?;
+        let moderation_provider = ModerationService::get_provider(&config)?;
         let dns_resolver = StandardDnsResolver {};
         //TODO: Add more filters here
         let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
         let http_client =
+<<<<<<< HEAD
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters, config.timeout);
         Ok(Proxy {
+=======
+            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
+        Ok(Context {
+>>>>>>> 5e674f977f60b6de59975b268efff03205f0be0c
             config: config.clone(),
             database,
             moderation_provider,
@@ -82,16 +87,16 @@ pub fn authenticate(api_keys: &[String], req: &Request<Body>) -> bool {
     }
 }
 
-pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
+pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
     metrics::ACTIVE_CLIENTS.inc();
     let response_time_start = Utc::now().timestamp_millis();
-    let proxy_config = proxy.config.clone();
+    let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if authenticate(&proxy.config.api_keys.clone(), req.borrow()) {
+            if authenticate(&ctx.config.api_keys.clone(), req.borrow()) {
                 let req_id = Uuid::new_v4();
-                rpc(proxy, req, req_id).await.or_else(|e| {
+                rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     Ok(e.to_response(&req_id, &proxy_config))
                 })
@@ -106,16 +111,16 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::OK)
             .body(Body::default())
             .unwrap_or_default()),
-        (&Method::GET, "/info") => info(&proxy.config).await,
-        (&Method::GET, "/metrics") if proxy.config.metrics_enabled => metrics(proxy).await,
-        (&Method::GET, path) if proxy.config.dashboard_enabled => {
+        (&Method::GET, "/info") => info(&ctx.config).await,
+        (&Method::GET, "/metrics") if ctx.config.metrics_enabled => metrics(ctx).await,
+        (&Method::GET, path) if ctx.config.dashboard_enabled => {
             let file = Asset::get(&path[1..]);
             match file {
                 Some(f) => Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header(
                         hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &proxy.config.cors.origin.to_owned(),
+                        &ctx.config.cors.origin.to_owned(),
                     )
                     .body(Body::from(f.data.into_owned()))
                     .unwrap()),
@@ -123,7 +128,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
                     .status(StatusCode::NOT_FOUND)
                     .header(
                         hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &proxy.config.cors.origin.to_owned(),
+                        &ctx.config.cors.origin.to_owned(),
                     )
                     .body(Body::default())
                     .unwrap_or_default()),
@@ -133,7 +138,7 @@ pub async fn route(proxy: Arc<Proxy>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::NOT_FOUND)
             .header(
                 hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                &proxy.config.cors.origin.to_owned(),
+                &ctx.config.cors.origin.to_owned(),
             )
             .body(Body::default())
             .unwrap_or_default()),
@@ -168,11 +173,11 @@ async fn info(config: &Configuration) -> Result<Response<Body>, GenericError> {
         .unwrap_or_default())
 }
 
-async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
+async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
 
-    if let Some(cache) = &proxy.cache {
+    if let Some(cache) = &ctx.cache {
         cache.gather_metrics(&metrics::CACHE_METRICS);
     }
 
@@ -189,7 +194,7 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .header(
             hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-            &proxy.config.cors.origin,
+            &ctx.config.cors.origin,
         )
         .body(Body::from(output.unwrap_or_default()))
         .unwrap_or_else(|_| {
@@ -201,17 +206,14 @@ async fn metrics(proxy: Arc<Proxy>) -> Result<Response<Body>, GenericError> {
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
-    match serde_json::from_slice::<T>(body) {
-        Ok(o) => Ok(o),
-        Err(e) => {
-            error!("Json decode error, reason:{}", e);
-            Err(Errors::JsonDecodeError)
-        }
-    }
+    serde_json::from_slice::<T>(body).map_err(|e| {
+        error!("Json decode error, reason:{}", e);
+        Errors::JsonDecodeError
+    })
 }
 
 async fn rpc(
-    proxy: Arc<Proxy>,
+    ctx: Arc<Context>,
     req: Request<Body>,
     req_id: Uuid,
 ) -> Result<Response<Body>, Errors> {
@@ -225,19 +227,17 @@ async fn rpc(
                 match method {
                     RpcMethods::img_proxy_fetch => {
                         let params = decode::<FetchRequest>(&body)?;
-                        Methods::fetch(proxy, &req_id, &params.params).await
+                        fetch(ctx, &req_id, &params.params).await
                     }
                     RpcMethods::img_proxy_describe => {
                         let params = decode::<DescribeRequest>(&body)?;
-                        Methods::describe(proxy, &req_id, &params.params).await
+                        describe(ctx, &req_id, &params.params).await
                     }
                     RpcMethods::img_proxy_report => {
                         let params = decode::<ReportRequest>(&body)?;
-                        Methods::report(proxy, &req_id, &params.params).await
+                        report(ctx, &req_id, &params.params).await
                     }
-                    RpcMethods::img_proxy_describe_report => {
-                        Methods::describe_report(proxy, &req_id).await
-                    }
+                    RpcMethods::img_proxy_describe_report => describe_report(ctx, &req_id).await,
                 }
             }
             Ok(_) => Err(Errors::InvalidRpcVersionError),
