@@ -6,3 +6,5 @@ log/**
 .env
 *.txt
 *.log
+new_user_credentials.csv
+

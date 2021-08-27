@@ -1,6 +1,7 @@
 extern crate bb8_postgres;
 extern crate tokio_postgres;
 
+
 use crate::cache::{get_cache, Cache};
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
@@ -57,7 +58,7 @@ impl Proxy {
         let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
         let http_client =
-            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
+            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters, config.timeout);
         Ok(Proxy {
             config: config.clone(),
             database,

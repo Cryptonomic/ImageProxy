@@ -29,13 +29,13 @@ appenders:
         base: 0
 
 root:
-  level: info
+  level: debug
   appenders:
     - root_stdout
 
 loggers:
   nft_image_proxy:
-    level: info
+    level: debug
     appenders:
       - stdout
       - log_file

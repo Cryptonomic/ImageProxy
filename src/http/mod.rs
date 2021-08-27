@@ -1,4 +1,8 @@
 use std::borrow::Borrow;
+use std::time::Duration;
+
+use std::error::Error as StdError;
+use std::io::ErrorKind;
 
 use hyper::client::HttpConnector;
 use hyper::http::uri::Scheme;
@@ -9,18 +13,24 @@ use log::error;
 use log::info;
 use log::{debug, warn};
 use uuid::Uuid;
+use hyper_timeout::TimeoutConnector;
+
 
 use crate::config::Host;
 use crate::document::Document;
 use crate::metrics;
 use crate::rpc::error::Errors;
 
+
+use hyper::client::connect::dns::GaiResolver;
+use hyper::Body;
+
 use self::filters::UriFilter;
 
 pub mod filters;
 
 pub struct HttpClient {
-    client: Client<HttpsConnector<HttpConnector>>,
+    client: Client<TimeoutConnector<HttpsConnector<HttpConnector<GaiResolver>>>, Body>,
     _max_document_size: Option<u64>,
     ipfs_config: Host,
     uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
@@ -31,9 +41,16 @@ impl HttpClient {
         ipfs_config: Host,
         max_document_size: Option<u64>,
         uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
+        timeout: u64
     ) -> HttpClient {
         let https = HttpsConnector::new();
-        let client = Client::builder().build(https);
+        let mut connector = TimeoutConnector::new(https);
+        
+        connector.set_connect_timeout(Some(Duration::from_secs(timeout)));
+        connector.set_read_timeout(Some(Duration::from_secs(timeout)));
+        connector.set_write_timeout(Some(Duration::from_secs(timeout)));
+
+        let client = Client::builder().build::<_,hyper::Body>(connector);
         assert!(
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
@@ -145,6 +162,17 @@ impl HttpClient {
                         error!("Document not found on remote, id={}", req_id);
                         Err(Errors::NotFound)
                     }
+                    
+                    hyper::StatusCode::REQUEST_TIMEOUT => {
+                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                        error!("Unable to fetch document because the request timed out, id={}", req_id);
+                        Err(Errors::Timeout)
+                    }
+                    hyper::StatusCode::GATEWAY_TIMEOUT => {
+                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                        error!("Unable to fetch document because the response timed out, id={}", req_id);
+                        Err(Errors::Timeout)
+                    } 
                     e => {
                         metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                         error!(
@@ -155,12 +183,26 @@ impl HttpClient {
                     }
                 },
                 Err(e) => {
-                    metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
-                    error!(
-                        "Unable to fetch document, id={}, reason={}, url={}",
-                        req_id, e, url
-                    );
-                    Err(Errors::FetchFailed)
+
+                    let err = e.source().unwrap().downcast_ref::<std::io::Error>().unwrap();
+
+                    if let ErrorKind::TimedOut = err.kind(){
+                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                        error!("Unable to fetch document because either the  connection,response or request timed out, id={}", req_id);
+                        Err(Errors::Timeout) 
+
+
+                    } else {
+                            metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                            error!(
+                                "Unable to fetch document, id={}, reason={}, url={}",
+                                req_id, e, url
+                            );
+                            Err(Errors::FetchFailed)
+
+                        }
+                    
+
                 }
             },
             Some(false) => {
