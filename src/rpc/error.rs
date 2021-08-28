@@ -26,6 +26,7 @@ pub enum Errors {
     UnsupportedUriScheme,
     InvalidUri,
     InvalidOrBlockedHost,
+    TimedOut,
 }
 
 impl Errors {
@@ -44,6 +45,7 @@ impl Errors {
             Errors::InvalidOrBlockedHost => {
                 (110, "Invalid or blocked destination host".to_string())
             }
+            Errors::TimedOut => (111, "Connection/Request/Response from the destination timedout".to_string())
         };
 
         RpcError {
