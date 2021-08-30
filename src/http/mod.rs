@@ -172,22 +172,19 @@ impl HttpClient {
                 },
                 Err(e) => {
                     metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
-                    let err = e
-                        .source()
-                        .unwrap()
-                        .downcast_ref::<std::io::Error>()
-                        .unwrap();
-                   
-                    if let ErrorKind::TimedOut = err.kind() {
-                        error!("Unable to fetch document, connection/response/request to the server timed out, id={}", req_id);
-                        Err(Errors::TimedOut)
-                    } else {
-                        error!(
-                            "Unable to fetch document, id={}, reason={}, url={}",
-                            req_id, e, url
-                        );
-                        Err(Errors::FetchFailed)
+                    if let Some(err_ref) = e.source() {
+                        if let Some(err) = err_ref.downcast_ref::<std::io::Error>() {
+                            if let ErrorKind::TimedOut = err.kind() {
+                                error!("Unable to fetch document, connection/response/request to the server timed out, id={}", req_id);
+                                return Err(Errors::TimedOut);
+                            }
+                        }
                     }
+                    error!(
+                        "Unable to fetch document, id={}, reason={}, url={}",
+                        req_id, e, url
+                    );
+                    Err(Errors::FetchFailed)
                 }
             },
             Some(false) => {
