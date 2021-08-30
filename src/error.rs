@@ -46,7 +46,7 @@ impl Errors {
             Errors::InvalidOrBlockedHost => {
                 (110, "Invalid or blocked destination host".to_string())
             }
-            Errors::TimedOut => (111, "Connection/Request/Response from the destination timedout".to_string()),
+            Errors::TimedOut => (111, "Connection/Request/Response from the destination timed out".to_string()),
         };
 
         RpcError {
