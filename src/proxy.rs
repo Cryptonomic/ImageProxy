@@ -24,6 +24,8 @@ use crate::{
     moderation::{ModerationProvider, ModerationService},
 };
 
+use crate::auth::*;
+
 use chrono::Utc;
 
 use hyper::{Body, Method, Request, Response, StatusCode};
@@ -45,6 +47,7 @@ pub struct Context {
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
+    pub api_key_service: ApiKeysService,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
 }
 
@@ -58,11 +61,14 @@ impl Context {
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
+        let api_key_service = ApiKeysService::new(config.api_key_file_refresh)?;
+
         Ok(Context {
             config: config.clone(),
             database,
             moderation_provider,
             http_client,
+            api_key_service,
             cache: get_cache(&config.cache_config),
         })
     }
@@ -88,7 +94,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if authenticate(&ctx.config.api_keys.clone(), req.borrow()) {
+            if ctx.api_key_service.authenticate(req.borrow()){
                 let req_id = Uuid::new_v4();
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();

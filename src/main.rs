@@ -14,6 +14,7 @@ pub mod moderation;
 pub mod proxy;
 pub mod rpc;
 pub mod utils;
+pub mod auth;
 
 use std::{
     convert::Infallible,

@@ -54,7 +54,7 @@ pub struct Configuration {
     pub metrics_enabled: bool,
     pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
-    pub api_keys: Vec<String>,
+    pub api_key_file_refresh: u64,
     pub database: DatabaseConfig,
     pub moderation: ModerationConfig,
     pub cache_config: CacheConfig,
