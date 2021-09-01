@@ -147,8 +147,12 @@ impl ApiKeysService {
     fn validate(&self, key: &str) -> bool {
         match self.get_status() {
             Ok(Status::Active) => {
-                let dt = self.keys.lock().unwrap();
-                dt.api_keys.contains(&key.to_owned())
+                let lock = self.keys.lock();
+                match lock{
+                    Ok(guard) => {guard.api_keys.contains(&key.to_owned())}
+                    _ => false
+                }
+               
             }
             _ => false,
         }
