@@ -74,18 +74,6 @@ impl Context {
     }
 }
 
-pub fn authenticate(api_keys: &[String], req: &Request<Body>) -> bool {
-    match req.headers().get("apikey") {
-        Some(h) => match String::from_utf8(h.as_bytes().to_vec()) {
-            Ok(key) => api_keys.contains(&key),
-            Err(e) => {
-                error!("Unable to convert api key header to string, reason={}", e);
-                false
-            }
-        },
-        None => false,
-    }
-}
 
 pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
