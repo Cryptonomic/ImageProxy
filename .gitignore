@@ -6,3 +6,4 @@ log/**
 .env
 *.txt
 *.log
+/lib/npm/**/*.js
