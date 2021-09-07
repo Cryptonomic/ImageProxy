@@ -1,9 +1,14 @@
 use std::borrow::Borrow;
+use std::time::Duration;
+
+use std::error::Error as StdError;
+use std::io::ErrorKind;
 
 use hyper::client::HttpConnector;
 use hyper::http::uri::Scheme;
 use hyper::Client;
 use hyper::{body::to_bytes, Uri};
+use hyper_timeout::TimeoutConnector;
 use hyper_tls::HttpsConnector;
 use log::error;
 use log::info;
@@ -15,12 +20,15 @@ use crate::document::Document;
 use crate::metrics;
 use crate::rpc::error::Errors;
 
+use hyper::client::connect::dns::GaiResolver;
+use hyper::Body;
+
 use self::filters::UriFilter;
 
 pub mod filters;
 
 pub struct HttpClient {
-    client: Client<HttpsConnector<HttpConnector>>,
+    client: Client<TimeoutConnector<HttpsConnector<HttpConnector<GaiResolver>>>, Body>,
     _max_document_size: Option<u64>,
     ipfs_config: Host,
     uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
@@ -31,9 +39,16 @@ impl HttpClient {
         ipfs_config: Host,
         max_document_size: Option<u64>,
         uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
+        timeout: u64,
     ) -> HttpClient {
         let https = HttpsConnector::new();
-        let client = Client::builder().build(https);
+        let mut connector = TimeoutConnector::new(https);
+
+        connector.set_connect_timeout(Some(Duration::from_secs(timeout)));
+        connector.set_read_timeout(Some(Duration::from_secs(timeout)));
+        connector.set_write_timeout(Some(Duration::from_secs(timeout)));
+
+        let client = Client::builder().build::<_, hyper::Body>(connector);
         assert!(
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
@@ -145,6 +160,7 @@ impl HttpClient {
                         error!("Document not found on remote, id={}", req_id);
                         Err(Errors::NotFound)
                     }
+
                     e => {
                         metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
                         error!(
@@ -156,6 +172,14 @@ impl HttpClient {
                 },
                 Err(e) => {
                     metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                    if let Some(err_ref) = e.source() {
+                        if let Some(err) = err_ref.downcast_ref::<std::io::Error>() {
+                            if let ErrorKind::TimedOut = err.kind() {
+                                error!("Unable to fetch document, connection/response/request to the server timed out, id={}", req_id);
+                                return Err(Errors::TimedOut);
+                            }
+                        }
+                    }
                     error!(
                         "Unable to fetch document, id={}, reason={}, url={}",
                         req_id, e, url
