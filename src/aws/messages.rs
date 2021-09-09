@@ -18,8 +18,8 @@ impl From<ModerationLabel> for Label {
     fn from(m: ModerationLabel) -> Self {
         Self {
             Confidence: m.confidence.unwrap_or(-1.0),
-            Name: m.name.unwrap_or("".into()),
-            ParentName: m.parent_name.unwrap_or("".into()),
+            Name: m.name.unwrap_or_else(|| "".into()),
+            ParentName: m.parent_name.unwrap_or_else(|| "".into()),
         }
     }
 }
@@ -46,7 +46,7 @@ impl From<DetectModerationLabelsOutput> for RekognitionResponse {
                     l
                 })
                 .collect(),
-            ModerationModelVersion: d.moderation_model_version.unwrap_or("".into()),
+            ModerationModelVersion: d.moderation_model_version.unwrap_or_else(|| "".into()),
         }
     }
 }
