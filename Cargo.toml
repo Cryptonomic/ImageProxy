@@ -34,6 +34,12 @@ image = "0.23"
 dns-lookup = "1.0.7"
 anyhow = "1.0.42"
 rust-embed="6.0.0"
+# deps for aws
+aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-config" }
+aws-sdk-rekognition = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-sdk-rekognition" }
+aws-sdk-s3 =  { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-sdk-s3"  }
+smithy-types = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "smithy-types" } 
+aws-types = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-types" }
 
 # The following deps are to resolve vulns
 crossbeam-deque ="0.8"
