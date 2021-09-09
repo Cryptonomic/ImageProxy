@@ -1307,7 +1307,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "smithy-types",
  "tokio",
  "tokio-postgres",
  "uuid",
