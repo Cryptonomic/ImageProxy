@@ -1,0 +1,42 @@
+# By default all log messages are written to the `log_file` appender.
+# In addition, all pre-initialization messages will be also available
+# on stdout
+refresh_rate: 30 seconds
+
+appenders:  
+  root_stdout:
+    kind: console    
+  stdout:
+    kind: console
+    filters:
+    - kind: proxy_filter
+
+  log_file:
+    kind: rolling_file
+    path: log/proxy.log
+    append: true
+    encoder:
+      kind: pattern
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 10 mb
+      roller:
+        kind: fixed_window
+        pattern: log/proxy.{}.log
+        count: 4
+        base: 0
+
+root:
+  level: info
+  appenders:
+    - root_stdout
+
+loggers:
+  nft_image_proxy:
+    level: info
+    appenders:
+      - stdout
+      - log_file
+    additive: false
