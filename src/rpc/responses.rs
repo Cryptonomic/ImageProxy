@@ -33,9 +33,9 @@ pub enum ModerationStatus {
 impl From<bool> for ModerationStatus {
     fn from(s: bool) -> Self {
         if s {
-            ModerationStatus::Allowed
-        } else {
             ModerationStatus::Blocked
+        } else {
+            ModerationStatus::Allowed
         }
     }
 }
