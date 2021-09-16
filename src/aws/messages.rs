@@ -12,6 +12,15 @@ pub struct Label {
     pub ParentName: String,
 }
 
+impl Label {
+    pub fn get_top_level_category(&self) -> String {
+        match self.ParentName.is_empty() {
+            true => self.Name.clone(),
+            _ => self.ParentName.clone(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[allow(non_snake_case)]
 pub struct RekognitionResponse {
@@ -24,7 +33,7 @@ impl RekognitionResponse {
         let labels: HashSet<String> = self
             .ModerationLabels
             .iter()
-            .map(|l| l.ParentName.clone())
+            .map(|l| l.get_top_level_category())
             .filter(|l| !l.is_empty())
             .collect();
         labels
