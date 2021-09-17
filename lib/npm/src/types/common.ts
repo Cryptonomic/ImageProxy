@@ -18,7 +18,7 @@ export interface ImageProxyServer {
 }
 
 export enum ModerationLabel {
-  ExplicitNudity = "ExplicitNucity",
+  ExplicitNudity = "ExplicitNudity",
   Suggestive = "Suggestive",
   Violence = "Violence",
   VisuallyDisturbing = "VisuallyDisturbing",

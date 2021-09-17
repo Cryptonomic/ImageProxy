@@ -51,6 +51,7 @@ pub struct Configuration {
     pub workers: u16,
     pub bind_address: Ipv4Addr,
     pub port: u16,
+    pub timeout: u64,
     pub metrics_enabled: bool,
     pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
