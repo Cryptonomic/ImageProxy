@@ -8,13 +8,13 @@ pub mod db;
 pub mod dns;
 pub mod document;
 pub mod http;
+pub mod keys;
 pub mod logging;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;
 pub mod rpc;
 pub mod utils;
-pub mod auth;
 
 use std::{
     convert::Infallible,
@@ -72,6 +72,9 @@ fn main() {
 
     info!("Loading configuration file");
     let config = Configuration::load().unwrap();
+
+    info!("Initializing Api Keys service");
+    keys::start_service("keys", config.api_keys_refresh);
 
     info!("Initializing runtime");
     let runtime = TokioBuilder::new_multi_thread()

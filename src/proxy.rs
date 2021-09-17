@@ -8,7 +8,7 @@ use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::http::filters::UriFilter;
-use crate::metrics;
+use crate::{keys, metrics};
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
 use crate::{built_info, rpc::error::Errors};
@@ -24,7 +24,6 @@ use crate::{
     moderation::{ModerationProvider, ModerationService},
 };
 
-use crate::auth::*;
 
 use chrono::Utc;
 
@@ -47,7 +46,6 @@ pub struct Context {
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
-    pub api_key_service: ApiKeysService,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
 }
 
@@ -61,19 +59,29 @@ impl Context {
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
         let http_client =
             HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
-        let api_key_service = ApiKeysService::new(config.api_key_file_refresh)?;
 
         Ok(Context {
             config: config.clone(),
             database,
             moderation_provider,
             http_client,
-            api_key_service,
             cache: get_cache(&config.cache_config),
         })
     }
 }
 
+pub fn authenticate(req: &Request<Body>) -> bool {
+    match req.headers().get("apikey") {
+        Some(h) => match String::from_utf8(h.as_bytes().to_vec()) {
+            Ok(key) => keys::validate(&key),
+            Err(e) => {
+                error!("Unable to convert api key header to string, reason={}", e);
+                false
+            }
+        },
+        None => false,
+    }
+}
 
 pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
@@ -82,7 +90,7 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if ctx.api_key_service.authenticate(req.borrow()){
+            if authenticate(req.borrow()){
                 let req_id = Uuid::new_v4();
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
