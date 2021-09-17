@@ -14,9 +14,10 @@ pub struct Label {
 
 impl Label {
     pub fn top_category(&self) -> &str {
-        match self.ParentName.is_empty() {
-            true => &self.Name,
-            _ => &self.ParentName,
+        if self.ParentName.is_empty() {
+            &self.Name
+        } else {
+            &self.ParentName
         }
     }
 }
