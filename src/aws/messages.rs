@@ -35,7 +35,6 @@ impl RekognitionResponse {
             .ModerationLabels
             .iter()
             .map(|l| l.top_category().to_owned())
-            .filter(|l| !l.is_empty())
             .collect();
         labels
             .iter()
