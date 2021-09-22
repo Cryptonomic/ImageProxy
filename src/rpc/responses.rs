@@ -128,6 +128,10 @@ impl FetchResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
+                .header(
+                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    config.cors.origin.to_owned(),
+                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
