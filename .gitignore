@@ -6,8 +6,4 @@ log/**
 .env
 *.txt
 *.log
-<<<<<<< HEAD
 /lib/npm/**/*.js
-=======
-/lib/npm/**/*.js
->>>>>>> 7138cd1f382abf67cbc1de4e4358635c4f973293
