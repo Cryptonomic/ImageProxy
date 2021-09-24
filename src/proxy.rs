@@ -56,9 +56,13 @@ impl Context {
         //TODO: Add more filters here
         let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
-        let http_client =
-            HttpClient::new(config.ipfs.clone(), config.max_document_size, uri_filters);
-        Ok(Context {
+        let http_client = HttpClient::new(
+            config.ipfs.clone(),
+            config.max_document_size,
+            uri_filters,
+            config.timeout
+        );
+        Ok(Context{
             config: config.clone(),
             database,
             moderation_provider,
