@@ -13,7 +13,7 @@ pub struct RpcError {
     pub request_id: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize,Debug)]
 pub enum Errors {
     InvalidRpcVersionError,
     InvalidRpcMethodError,

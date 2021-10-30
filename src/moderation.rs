@@ -1,6 +1,9 @@
+//use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::warn;
 use serde::{Deserialize, Serialize};
+//use uuid::Uuid;
 
 use crate::{aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors};
 
@@ -11,6 +14,8 @@ pub enum SupportedMimeTypes {
     ImageGif,
     ImageBmp,
     ImageTiff,
+    VideoMp4,
+    VideoMov,
     Unsupported,
 }
 
@@ -24,6 +29,8 @@ impl SupportedMimeTypes {
             "image/gif" => SupportedMimeTypes::ImageGif,
             "image/bmp" => SupportedMimeTypes::ImageBmp,
             "image/x-ms-bmp" => SupportedMimeTypes::ImageBmp,
+            "video/mp4" => SupportedMimeTypes::VideoMp4,
+            "video/quicktime" => SupportedMimeTypes::VideoMov,
             _ => SupportedMimeTypes::Unsupported,
         }
     }
@@ -54,7 +61,7 @@ pub struct ModerationResponse {
 pub trait ModerationProvider: Send + Sync {
     async fn moderate(&self, document: &Document) -> Result<ModerationResponse, Errors>;
     fn supported_types(&self) -> Vec<SupportedMimeTypes>;
-    fn max_document_size(&self) -> u64;
+    fn max_document_size(&self, document_type: &SupportedMimeTypes) -> u64;
 }
 
 #[derive(Clone)]
@@ -73,7 +80,7 @@ impl ModerationProvider for NullProvider {
         vec![SupportedMimeTypes::ImageJpeg, SupportedMimeTypes::ImagePng]
     }
 
-    fn max_document_size(&self) -> u64 {
+    fn max_document_size(&self, _document_type: &SupportedMimeTypes) -> u64 {
         5242880
     }
 }
@@ -93,7 +100,12 @@ impl ModerationService {
         match config.moderation.provider {
             ModerationService::Aws => match &config.moderation.aws {
                 Some(aws_config) => {
-                    let s = Rekognition::new(&aws_config.region)?;
+                    let s = Rekognition::new(
+                        &aws_config.region,
+                        &aws_config.s3_jobs,
+                        &aws_config.rekognition_jobs,
+                        &aws_config.video.clone(),
+                    )?;
                     Ok(Box::new(s))
                 }
                 None => Err("Moderation provider configuration is missing".into()),

@@ -1,7 +1,9 @@
 pub mod error;
 pub mod requests;
 pub mod responses;
+pub mod task;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use hyper::Body;
@@ -21,10 +23,12 @@ use crate::{
 use requests::*;
 use responses::*;
 
+use task::VideoModerationTask;
+
 /// rpc version information
 pub static VERSION: &str = "1.0.0";
 
-async fn fetch_document(
+pub async fn fetch_document(
     ctx: Arc<Context>,
     req_id: &Uuid,
     url: &str,
@@ -98,50 +102,69 @@ pub async fn fetch(
             metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
             info!("No cached results found for id={}", req_id);
             let document = fetch_document(ctx.clone(), req_id, &params.url).await?;
-            let max_document_size = ctx.moderation_provider.max_document_size();
             let supported_types = ctx.moderation_provider.supported_types();
             let document_type = SupportedMimeTypes::from_string(&document.content_type);
+            let max_document_size = ctx.moderation_provider.max_document_size(&document_type);
 
             metrics::MODERATION.with_label_values(&["requests"]).inc();
 
             // Resize the image if required or reformat to png if required
-            let mod_response = if document.bytes.len() as u64 >= max_document_size
-                || !supported_types.contains(&document_type)
-            {
-                let resized_doc = document.resize_image(max_document_size)?;
-                ctx.moderation_provider.moderate(&resized_doc).await?
-            } else {
-                ctx.moderation_provider.moderate(&document).await?
-            };
+            if document.is_image() {
+                let mod_response = if (document.bytes.len() as u64 >= max_document_size
+                    || !supported_types.contains(&document_type))
+                    && document.is_image()
+                {
+                    let resized_doc = document.resize_image(max_document_size)?;
+                    ctx.moderation_provider.moderate(&resized_doc).await?
+                } else {
+                    ctx.moderation_provider.moderate(&document).await?
+                };
 
-            metrics::TRAFFIC
-                .with_label_values(&["moderated"])
-                .inc_by(document.bytes.len() as u64);
+                metrics::TRAFFIC
+                    .with_label_values(&["moderated"])
+                    .inc_by(document.bytes.len() as u64);
 
-            let blocked = !mod_response.categories.is_empty();
-            let mod_status: ModerationStatus = blocked.into();
+                let blocked = !mod_response.categories.is_empty();
+                debug!(
+                    "got categories {:?} is empty {:?}",
+                    mod_response.categories, blocked
+                );
+                let mod_status: ModerationStatus = blocked.into();
 
-            if blocked {
-                metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
-            }
-
-            let categories = mod_response.categories.clone();
-            match ctx
-                .database
-                .add_moderation_result(
-                    &params.url,
-                    mod_response.provider,
-                    blocked,
-                    &mod_response.categories,
-                )
-                .await
-            {
-                Ok(_) => info!("Database updated for id={}", req_id),
-                Err(e) => {
-                    error!("Database not updated for id={}, reason={}", req_id, e)
+                if blocked {
+                    metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
                 }
-            };
-            (mod_status, categories, Some(document.clone()))
+
+                let categories = mod_response.categories.clone();
+                match ctx
+                    .database
+                    .add_moderation_result(
+                        &params.url,
+                        mod_response.provider,
+                        blocked,
+                        &mod_response.categories,
+                    )
+                    .await
+                {
+                    Ok(_) => info!("Database updated for id={}", req_id),
+                    Err(e) => {
+                        error!("Database not updated for id={}, reason={}", req_id, e)
+                    }
+                };
+                (mod_status, categories, Some(document.clone()))
+            } else {
+                // add is video check here
+                info!("document not image");
+                let _ctx = ctx.clone();
+                let _req_id = *req_id;
+                let _url = params.url.to_owned();
+
+                ctx.queue
+                    .spawn(VideoModerationTask::new(ctx.clone(), *req_id, _url).await)
+                    .await;
+
+                (ModerationStatus::Pending, vec![], Some(document.clone()))
+            }
         }
     };
 
@@ -164,6 +187,15 @@ pub async fn describe(
         "New describe request, id={}, urls={:?}",
         req_id, params.urls
     );
+
+    let mut awaiting: HashSet<String> = HashSet::new();
+
+    for u in params.urls.iter() {
+        if ctx.queue.job_exists(u.to_string()).await {
+            awaiting.insert(u.to_string());
+        }
+    }
+
     match ctx.database.get_moderation_result(&params.urls).await {
         Ok(results) => {
             info!("Fetched results for id={}, rows={}", req_id, results.len());
@@ -184,12 +216,23 @@ pub async fn describe(
                             provider: res.provider.clone(),
                         }
                     }
-                    None => DescribeResult {
-                        url: url.clone(),
-                        status: DocumentStatus::NeverSeen,
-                        categories: Vec::new(),
-                        provider: ModerationService::None,
-                    },
+                    None => {
+                        if awaiting.contains(url) {
+                            DescribeResult {
+                                url: url.clone(),
+                                status: DocumentStatus::Pending,
+                                categories: Vec::new(),
+                                provider: ModerationService::None,
+                            }
+                        } else {
+                            DescribeResult {
+                                url: url.clone(),
+                                status: DocumentStatus::NeverSeen,
+                                categories: Vec::new(),
+                                provider: ModerationService::None,
+                            }
+                        }
+                    }
                 })
                 .collect();
             Ok(DescribeResponse::to_response(

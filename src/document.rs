@@ -10,7 +10,9 @@ use crate::rpc::error::Errors;
 use base64::encode;
 use hyper::body::Bytes;
 
+//use image::error::UnsupportedError;
 use image::DynamicImage;
+use image::ImageError;
 use image::ImageFormat;
 use image::{self, GenericImageView};
 use log::{debug, error};
@@ -31,6 +33,25 @@ impl ByteSizeable for Document {
 }
 
 impl Document {
+    pub fn mime_type(&self) -> SupportedMimeTypes {
+        SupportedMimeTypes::from_string(&self.content_type)
+    }
+
+    pub fn is_video(&self) -> bool {
+        matches!(
+            self.mime_type(),
+            SupportedMimeTypes::VideoMp4 | SupportedMimeTypes::VideoMov
+        )
+        /* match self.mime_type() {
+            SupportedMimeTypes::VideoMp4 => true,
+            _ => false,
+        } */
+    }
+
+    pub fn is_image(&self) -> bool {
+        !self.is_video() && self.mime_type() != SupportedMimeTypes::Unsupported
+    }
+
     fn load_image(&self, image_type: SupportedMimeTypes) -> Result<DynamicImage, Errors> {
         let cursor = Cursor::new(&self.bytes);
         let img = match image_type {
@@ -39,7 +60,8 @@ impl Document {
             SupportedMimeTypes::ImageJpeg => image::load(cursor, ImageFormat::Jpeg),
             SupportedMimeTypes::ImagePng => image::load(cursor, ImageFormat::Png),
             SupportedMimeTypes::ImageTiff => image::load(cursor, ImageFormat::Tiff),
-            SupportedMimeTypes::Unsupported => image::load(cursor, ImageFormat::Jpeg), //TODO
+            //SupportedMimeTypes::Unsupported => image::load(cursor, ImageFormat::Jpeg), //TODO
+            _ => Err(ImageError::IoError(std::io::ErrorKind::Unsupported.into())),
         };
         img.map_err(|e| {
             error!("Unable to open image, reason={}", e);

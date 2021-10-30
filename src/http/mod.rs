@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::pin::Pin;
 use std::time::Duration;
 
 use std::error::Error as StdError;
@@ -98,6 +99,9 @@ impl HttpClient {
             }
             _ => Err(Errors::UnsupportedUriScheme),
         }
+    }
+    pub async fn my_fetch(&self, req_id: &Uuid, url: &str) -> Pin<Box<Result<Document, Errors>>> {
+        Box::pin(self.fetch(req_id, url).await)
     }
 
     pub async fn fetch(&self, req_id: &Uuid, url: &str) -> Result<Document, Errors> {

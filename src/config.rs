@@ -31,9 +31,22 @@ pub struct DatabaseConfig {
     pub pool_idle_connections: u32,
     pub pool_connection_timeout: u64,
 }
+
+#[derive(Deserialize, Clone)]
+pub struct VideoConfig {
+    pub bucket: String,
+    pub sns_topic_arn: String,
+    pub role_arn: String,
+    pub s3_jobs: usize,
+    pub queue_concurrency: usize,
+}
+
 #[derive(Deserialize, Clone)]
 pub struct AwsConfig {
     pub region: String,
+    pub s3_jobs: usize,
+    pub rekognition_jobs: usize,
+    pub video: Option<VideoConfig>,
 }
 
 #[derive(Deserialize, Clone)]

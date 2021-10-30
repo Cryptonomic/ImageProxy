@@ -8,7 +8,6 @@ use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::http::filters::UriFilter;
-use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
 use crate::{built_info, rpc::error::Errors};
@@ -23,6 +22,7 @@ use crate::{
     db::Database,
     moderation::{ModerationProvider, ModerationService},
 };
+use crate::{metrics, queue2};
 
 use chrono::Utc;
 
@@ -34,6 +34,11 @@ use serde::de;
 use serde_json;
 use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
+
+use log::info;
+// for queue
+use crate::queue2::Queue;
+
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(RustEmbed)]
@@ -46,6 +51,7 @@ pub struct Context {
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
+    pub queue: Queue,
 }
 
 impl Context {
@@ -60,14 +66,28 @@ impl Context {
             config.ipfs.clone(),
             config.max_document_size,
             uri_filters,
-            config.timeout
+            config.timeout,
         );
-        Ok(Context{
+
+        let concurrency = if let Some(aws) = &config.moderation.aws {
+            if let Some(video) = &aws.video {
+                video.queue_concurrency
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        let queue = queue2::Queue::new(concurrency);
+
+        Ok(Context {
             config: config.clone(),
             database,
             moderation_provider,
             http_client,
             cache: get_cache(&config.cache_config),
+            queue,
         })
     }
 }
@@ -92,7 +112,11 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
+            //temp
+            info!("recieved post request");
             if authenticate(&ctx.config.api_keys.clone(), req.borrow()) {
+                //temp
+                info!("authenticated request");
                 let req_id = Uuid::new_v4();
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
@@ -215,6 +239,8 @@ async fn rpc(
     req: Request<Body>,
     req_id: Uuid,
 ) -> Result<Response<Body>, Errors> {
+    //temp
+    info!("request in rpc");
     match hyper::body::to_bytes(req.into_body()).await {
         Ok(body) => match decode::<MethodHeader>(&body) {
             Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => {

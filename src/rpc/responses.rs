@@ -28,6 +28,7 @@ pub enum RpcStatus {
 pub enum ModerationStatus {
     Allowed,
     Blocked,
+    Pending,
 }
 
 impl From<bool> for ModerationStatus {
@@ -71,6 +72,7 @@ pub struct FetchResponse {
 pub enum DocumentStatus {
     Blocked,
     Allowed,
+    Pending,
     NeverSeen,
 }
 

@@ -1,30 +1,38 @@
+pub mod errors;
 mod messages;
-mod util;
+pub mod s3;
+
+use crate::aws::errors::AwsError;
+
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use base64;
-use chrono::prelude::*;
-use hex;
-use hyper::{Body, Client, Method, Request};
-use hyper_tls::HttpsConnector;
 use log::{debug, error};
-use serde_json::json;
-use std::env;
 
 use messages::RekognitionResponse;
-use util::{get_signature_key, sign};
+
+use aws_sdk_rekognition::model::{Image, NotificationChannel, S3Object, Video, VideoJobStatus};
+
+use aws_sdk_rekognition::{Blob, Client as ClientRekognition, Region};
 
 use crate::{
+    config::VideoConfig,
     document::Document,
     moderation::{ModerationProvider, ModerationResponse, ModerationService, SupportedMimeTypes},
     rpc::error::Errors,
-    utils::sha256,
 };
+
+use messages::Label;
+
+use tokio::sync::Semaphore;
+use tokio::time::{self, Duration};
 
 pub struct Rekognition {
     pub region: String,
-    pub access_key: String,
-    pub secret_key: String,
+    pub rekognition_permits: Arc<Semaphore>,
+    pub s3_permits: Arc<Semaphore>,
+    pub video_config: Option<VideoConfig>,
+    pub client: Option<ClientRekognition>,
 }
 
 #[async_trait]
@@ -34,7 +42,8 @@ impl ModerationProvider for Rekognition {
         document: &Document,
     ) -> Result<crate::moderation::ModerationResponse, Errors> {
         debug!("New Rekognition request");
-        match self.get_moderation_labels(&document.bytes).await {
+
+        match self.get_moderation_labels(document).await {
             Ok(result) => {
                 let labels = result.get_labels();
                 debug!(
@@ -54,113 +63,203 @@ impl ModerationProvider for Rekognition {
     }
 
     fn supported_types(&self) -> Vec<SupportedMimeTypes> {
-        vec![SupportedMimeTypes::ImageJpeg, SupportedMimeTypes::ImagePng]
+        vec![
+            SupportedMimeTypes::ImageJpeg,
+            SupportedMimeTypes::ImagePng,
+            SupportedMimeTypes::VideoMp4,
+            SupportedMimeTypes::VideoMov,
+        ]
     }
 
-    fn max_document_size(&self) -> u64 {
-        5242880 // As per AWS documentation, 5 MB binary limit
+    fn max_document_size(&self, document_type: &SupportedMimeTypes) -> u64 {
+        match document_type {
+            SupportedMimeTypes::VideoMp4 => 10737418240,
+            _ => 5242880,
+        }
+        // As per AWS documentation, 5 MB binary limit for images
+        // but 15 mb for images added to bucket . 10gb for videos in bucket
     }
 }
 
 impl Rekognition {
-    fn get_host(&self) -> String {
-        format!("rekognition.{}.amazonaws.com", self.region)
+    pub async fn start_video_moderation(
+        &self,
+        client: &ClientRekognition,
+        channel: NotificationChannel,
+        bucket: &str,
+        key: &str,
+    ) -> Result<String, AwsError> {
+        let _permit = self.rekognition_permits.clone().acquire_owned().await?;
+
+        debug!("starting video moderation ");
+
+        let obj = S3Object::builder().bucket(bucket).name(key).build();
+        let video = Video::builder().s3_object(obj).build();
+
+        let r = client
+            .start_content_moderation()
+            .notification_channel(channel)
+            .job_tag("Moderation")
+            .video(video)
+            .send()
+            .await?; //.NotificationChannel(channel).
+
+        let job_id = match r.job_id {
+            Some(j) => j,
+            None => {
+                return Err("got an empty job id from rekognition".into());
+            }
+        }; //r.job_id.unwrap_or("".into());
+        Ok(job_id)
     }
 
-    fn get_url(&self) -> String {
-        format!("https://{}", self.get_host())
+    // TODO : Add support for nextToken
+
+    pub async fn get_moderation_results(
+        &self,
+        client: &ClientRekognition,
+        job_id: String,
+    ) -> Result<RekognitionResponse, AwsError> {
+        let mut backoff: u64 = 1;
+        let mut labels: Option<Vec<Label>> = None;
+
+        debug!("waiting for moderation results after recieving job id ");
+
+        loop {
+            let _permit = self.rekognition_permits.clone().acquire_owned().await?;
+            let mut pagination_token: Option<String> = None;
+
+            let r = client
+                .get_content_moderation()
+                .job_id(job_id.clone())
+                .set_next_token(pagination_token)
+                .send()
+                .await?;
+
+            let model_ver = r
+                .moderation_model_version
+                .clone()
+                .unwrap_or_else(|| "".into());
+
+            match r.job_status {
+                Some(VideoJobStatus::Succeeded) => {
+                    pagination_token = r.next_token.clone();
+
+                    if labels.is_none() {
+                        labels = Label::get_labels_video(r);
+                    } else {
+                        labels = labels.map(|mut l| {
+                            let lab: Option<Vec<Label>> = Label::get_labels_video(r);
+                            match lab {
+                                Some(lab) => {
+                                    l.extend(lab);
+                                    l
+                                }
+                                _ => l,
+                            }
+                        });
+                    }
+
+                    if pagination_token.is_none() {
+                        return Ok(RekognitionResponse {
+                            ModerationLabels: labels.unwrap_or_default(),
+                            ModerationModelVersion: model_ver,
+                        });
+                    }
+                }
+                Some(VideoJobStatus::InProgress) => {
+                    time::sleep(Duration::from_secs(backoff)).await;
+                    backoff *= 2;
+                }
+                Some(status) => {
+                    return Err(status.into());
+                }
+                _ => return Err("unknown error from rekonition , unknown VideoJob status".into()),
+            }
+        }
     }
 
     pub async fn get_moderation_labels(
         &self,
-        bytes: &hyper::body::Bytes,
-    ) -> Result<RekognitionResponse, Box<dyn std::error::Error + Send + Sync>> {
-        let amz_target = "RekognitionService.DetectModerationLabels";
-        let service = "rekognition";
-        let content_type = "application/x-amz-json-1.1";
-        let canonical_uri = "/";
-        let canonical_querystring = "";
-        let utc = Utc::now();
-        let amz_date = utc.format("%Y%m%dT%H%M%SZ").to_string();
-        let date_stamp = utc.format("%Y%m%d").to_string();
-        let canonical_headers = format!(
-            "content-type:{}\nhost:{}\nx-amz-date:{}\nx-amz-target:{}\n",
-            content_type,
-            self.get_host(),
-            amz_date,
-            amz_target
-        );
-        let signed_headers = "content-type;host;x-amz-date;x-amz-target";
-        let algorithm = "AWS4-HMAC-SHA256";
-        let credential_scope = format!("{}/{}/{}/aws4_request", date_stamp, self.region, service);
-        let request_dict = json!({
-            "Image": {
-                "Bytes": base64::encode(bytes.to_vec()),
-            },
-            "MinConfidence": 50.0,
-        });
-        let request_dict_encoded = request_dict.to_string();
-        let payload_hash = sha256(request_dict_encoded.as_bytes());
-        let canonical_request = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}",
-            "POST",
-            canonical_uri,
-            canonical_querystring,
-            canonical_headers,
-            signed_headers,
-            payload_hash
-        );
-        //let canonical_request = format!("{}", canonical_request);
-        let string_to_sign = format!(
-            "{}\n{}\n{}\n{}",
-            algorithm,
-            amz_date,
-            credential_scope,
-            sha256(canonical_request.as_bytes())
-        );
-        let signing_key =
-            get_signature_key(&self.secret_key, &date_stamp[..], &self.region, service);
-        let signature = sign(&signing_key, string_to_sign.as_bytes());
-        let authorization_header = format!(
-            "{} Credential={}/{}, SignedHeaders={}, Signature={}",
-            algorithm,
-            self.access_key,
-            credential_scope,
-            signed_headers,
-            hex::encode(signature)
-        );
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri(self.get_url())
-            .header("Content-Type", content_type)
-            .header("X-Amz-Date", amz_date)
-            .header("X-Amz-Target", amz_target)
-            .header("Authorization", authorization_header)
-            .body(Body::from(request_dict_encoded))?;
-        let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
+        document: &Document,
+    ) -> Result<RekognitionResponse, AwsError> {
+        let bytes: &hyper::body::Bytes = &document.bytes;
+        if document.is_video() {
+            if self.video_config.is_none() {
+                Err("aws video config missing".into())
+            } else {
+                // set up region a shared config
+                let bucket = &self.video_config.as_ref().unwrap().bucket;
+                let sns_topic_arn = &self.video_config.as_ref().unwrap().sns_topic_arn;
+                let s3_permits = &self.video_config.as_ref().unwrap().s3_jobs;
 
-        match client.request(req).await {
-            Ok(response) => {
-                debug!("Rekognition response, status={}", response.status()); //TODO
-                match hyper::body::to_bytes(response.into_body()).await {
-                    Ok(bytes) => match serde_json::from_slice::<RekognitionResponse>(&bytes) {
-                        Ok(r) => Ok(r),
-                        Err(e) => Err(Box::new(e)),
-                    },
-                    Err(e) => Err(Box::new(e)),
-                }
+                let role_arn = &self.video_config.as_ref().unwrap().role_arn;
+
+                let region = aws_sdk_s3::Region::new(self.region.as_str().to_owned());
+                //we need this future to setup client , hence we can't set up the client in new ,as new is
+                //not async
+
+                let shared_config = aws_config::from_env().region(region).load().await;
+
+                use crate::aws::s3::S3;
+                let s3 = S3::new(&self.region.as_str().to_owned(), bucket, s3_permits).await;
+
+                s3.add_to_bucket(document).await?;
+
+                let channel = NotificationChannel::builder()
+                    .sns_topic_arn(sns_topic_arn)
+                    .role_arn(role_arn)
+                    .build();
+
+                // set up rekognition client
+                let client_rekognition = ClientRekognition::new(&shared_config);
+
+                // start video moderation and get job id
+                let job_id = self
+                    .start_video_moderation(&client_rekognition, channel, bucket, &document.url)
+                    .await?;
+
+                // get reuslts
+                let response = self
+                    .get_moderation_results(&client_rekognition, job_id)
+                    .await?;
+
+                Ok(response)
             }
-            Err(e) => Err(Box::new(e)),
+        } else if document.is_image() {
+            let region = Region::new(self.region.clone());
+            let shared_config = aws_config::from_env().region(region).load().await;
+            let client = ClientRekognition::new(&shared_config);
+
+            let req = client.detect_moderation_labels();
+            let blob = Blob::new(bytes.as_ref()); //.to_vec());
+            let img = Image::builder().bytes(blob).build();
+
+            let response = req.image(img).send().await;
+            match response {
+                Ok(output) => {
+                    let rekognition_repsonse: RekognitionResponse = output.into();
+                    Ok(rekognition_repsonse)
+                }
+                Err(e) => Err(e.to_string().into()),
+            }
+        } else {
+            Err("document neither image or video".into())
         }
     }
 
-    pub fn new(aws_region: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(
+        aws_region: &str,
+        s3_jobs: &usize,
+        rekognition_jobs: &usize,
+        video_config: &Option<VideoConfig>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Rekognition {
             region: aws_region.to_string(),
-            access_key: env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID key not set"),
-            secret_key: env::var("AWS_SECRET_ACCESS_KEY")
-                .expect("AWS_SECRET_ACCESS_KEY key not set"),
+            rekognition_permits: Arc::new(Semaphore::new(*rekognition_jobs)),
+            s3_permits: Arc::new(Semaphore::new(*s3_jobs)),
+            video_config: video_config.clone(),
+            client: None,
         })
     }
 }
