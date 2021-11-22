@@ -21,6 +21,9 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "jemalloc")]
+use jemallocator::Jemalloc;
+
 use hyper::{
     service::{make_service_fn, service_fn},
     Server,
@@ -38,6 +41,10 @@ use crate::{metrics::init_registry, utils::print_banner};
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
+
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
@@ -68,6 +75,9 @@ fn main() {
         built_info::PKG_VERSION,
         built_info::GIT_VERSION.unwrap()
     );
+
+    #[cfg(feature = "jemalloc")]
+    info!("Using Jemallocator for memory allocations");
 
     info!("Loading configuration file");
     let config = Configuration::load().unwrap();

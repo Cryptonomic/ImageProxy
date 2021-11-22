@@ -33,6 +33,7 @@ image = "0.23"
 dns-lookup = "1"
 anyhow = "1.0"
 rust-embed="6.0.0"
+jemallocator = { version = "0.3", optional = true }
 
 # deps for aws
 aws-config = "0.0.25-alpha"
@@ -45,3 +46,7 @@ time = "0.3"
 
 [profile.release]
 lto = true
+
+[features]
+default = ["jemalloc"]
+jemalloc = ["jemallocator"]
