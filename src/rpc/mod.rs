@@ -69,6 +69,7 @@ pub async fn fetch(
 
     if params.force {
         metrics::DOCUMENT.with_label_values(&["forced"]).inc();
+        info!("Document id={} has forced flag enabled.", req_id);
     }
 
     let urls = vec![params.url.clone()];
