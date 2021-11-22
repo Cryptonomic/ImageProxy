@@ -146,7 +146,7 @@ impl HttpClient {
                         metrics::DOCUMENT_SIZE
                             .with_label_values(&["size_bytes"])
                             .observe(bytes.len() as f64);
-
+                        metrics::HTTP_CLIENT_CODES.with_label_values(&["200"]).inc();
                         Ok(Document {
                             id: *req_id,
                             content_type,
@@ -155,14 +155,12 @@ impl HttpClient {
                             url: url.to_string(),
                         })
                     }
-                    hyper::StatusCode::NOT_FOUND => {
-                        metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
-                        error!("Document not found on remote, id={}", req_id);
-                        Err(Errors::NotFound)
-                    }
 
                     e => {
                         metrics::DOCUMENT.with_label_values(&["fetch_error"]).inc();
+                        metrics::HTTP_CLIENT_CODES
+                            .with_label_values(&[e.as_str()])
+                            .inc();
                         error!(
                             "Unable to fetch document, id={}, response_code={}, url={}",
                             req_id, e, url

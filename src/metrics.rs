@@ -44,6 +44,11 @@ lazy_static! {
         &["method"]
     )
     .unwrap();
+    pub static ref HTTP_CLIENT_CODES: IntCounterVec = IntCounterVec::new(
+        Opts::new("http_client_codes", "HTTP Client status codes"),
+        &["status_code"]
+    )
+    .unwrap();
     pub static ref DOCUMENT: IntCounterVec = IntCounterVec::new(
         Opts::new("document", "Document stats by status"),
         &["status"]
@@ -82,7 +87,6 @@ pub fn init_registry() {
         .register(Box::new(URI_FILTER_BLOCKED.clone()))
         .unwrap();
 
-    
     #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();
     #[cfg(not(target_os = "macos"))]
