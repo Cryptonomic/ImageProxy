@@ -8,6 +8,7 @@ use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::http::filters::UriFilter;
+use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
 use crate::{built_info, rpc::error::Errors};
@@ -22,7 +23,6 @@ use crate::{
     db::Database,
     moderation::{ModerationProvider, ModerationService},
 };
-use crate::{metrics, queue2};
 
 use chrono::Utc;
 
@@ -36,8 +36,6 @@ use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
 
 use log::info;
-// for queue
-use crate::queue2::Queue;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -51,7 +49,6 @@ pub struct Context {
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client: HttpClient,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
-    pub queue: Queue,
 }
 
 impl Context {
@@ -69,25 +66,12 @@ impl Context {
             config.timeout,
         );
 
-        let concurrency = if let Some(aws) = &config.moderation.aws {
-            if let Some(video) = &aws.video {
-                video.queue_concurrency
-            } else {
-                0
-            }
-        } else {
-            0
-        };
-
-        let queue = queue2::Queue::new(concurrency);
-
         Ok(Context {
             config: config.clone(),
             database,
             moderation_provider,
             http_client,
             cache: get_cache(&config.cache_config),
-            queue,
         })
     }
 }

@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::{
     config::DatabaseConfig,
     moderation::{ModerationCategories, ModerationService},
+    rpc::responses::ModerationStatus,
     utils::sha256,
 };
 use bb8::Pool;
@@ -10,7 +11,6 @@ use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
 use log::debug;
 use tokio_postgres::NoTls;
-
 use uuid::Uuid;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -56,6 +56,80 @@ impl Database {
                 .await
                 .unwrap(),
         })
+    }
+
+    pub async fn job_exists(&self, url: &str) -> Result<bool> {
+        let url_hash = sha256(url.as_bytes());
+        let conn = self.pool.get().await?;
+        let results = conn
+            .query_one(
+                "SELECT exists ( select 1 from jobs where url_hash = $1);",
+                &[&url_hash],
+            )
+            .await?;
+        let exists: bool = results.get::<_, bool>("exists");
+        //let res = bool::from_str(exists).unwrap();
+        Ok(exists)
+    }
+
+    pub async fn job_status(&self, url: &str) -> Result<ModerationStatus> {
+        let url_hash = sha256(url.as_bytes());
+        let conn = self.pool.get().await?;
+        let results = conn
+            .query_one(
+                "SELECT jobs.status FROM jobs WHERE url_hash = $1;",
+                &[&url_hash],
+            )
+            .await?;
+        let status: &str = results.get::<_, &str>("status");
+        let status = serde_json::from_str::<ModerationStatus>(status)?;
+
+        Ok(status)
+    }
+
+    pub async fn add_job(&self, id: &str, url: &str, status: &ModerationStatus) -> Result<()> {
+        //let id = id.to_string();
+        let url_hash = sha256(url.as_bytes());
+        let timestamp = chrono::Utc::now();
+        let conn = self.pool.get().await?;
+        let status = serde_json::to_string(status).unwrap_or_else(|_| String::from("json_error"));
+        conn.execute(
+            "INSERT INTO jobs (id, status, url, url_hash, updated_at)
+            VALUES($1,$2,$3,$4,$5) 
+            ON CONFLICT (url_hash) 
+            DO NOTHING;",
+            &[&id, &status, &url, &url_hash, &timestamp],
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_job(&self, url: &str) -> Result<()> {
+        let url_hash = sha256(url.as_bytes());
+        let conn = self.pool.get().await?;
+        conn.execute(
+            "DELETE FROM jobs
+            where url_hash = $1;",
+            &[&url_hash],
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_job_status(&self, url: &str, status: &ModerationStatus) -> Result<()> {
+        let url_hash = sha256(url.as_bytes());
+        let timestamp = chrono::Utc::now();
+        let status = serde_json::to_string(status).unwrap_or_else(|_| String::from("json_error"));
+        let conn = self.pool.get().await?;
+        conn.execute(
+            "UPDATE jobs
+            SET status = $1 
+            updated_at = $2
+            WHERE url_hash = $3;",
+            &[&status, &timestamp, &url_hash],
+        )
+        .await?;
+        Ok(())
     }
 
     pub async fn add_report(

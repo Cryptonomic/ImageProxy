@@ -12,7 +12,6 @@ pub mod logging;
 pub mod metrics;
 pub mod moderation;
 pub mod proxy;
-pub mod queue2;
 pub mod rpc;
 pub mod storage;
 pub mod utils;

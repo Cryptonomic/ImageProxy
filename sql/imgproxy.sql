@@ -53,6 +53,21 @@ CREATE TABLE public.report (
 ALTER TABLE public.report OWNER TO imgproxy;
 
 --
+--
+-- Name: jobs; Type: TABLE; Schema: public; Owner: imgproxy
+--
+
+CREATE TABLE public.jobs (
+    id character varying(512) NOT NULL,
+    status character varying(256) NOT NULL,
+    url character varying(65536) NOT NULL,
+    url_hash character varying(256) NOT NULL,
+    updated_at timestamp with time zone NOT NULL
+);
+
+
+ALTER TABLE public.jobs OWNER TO imgproxy;
+
 -- Name: documents documents_pkey; Type: CONSTRAINT; Schema: public; Owner: imgproxy
 --
 
@@ -66,6 +81,14 @@ ALTER TABLE ONLY public.documents
 
 ALTER TABLE ONLY public.report
     ADD CONSTRAINT report_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: jobs report_pkey; Type: CONSTRAINT; Schema: public; Owner: imgproxy
+--
+
+ALTER TABLE ONLY public.jobs
+    ADD CONSTRAINT jobs_pkey PRIMARY KEY (url_hash);
 
 
 --
@@ -88,6 +111,11 @@ CREATE INDEX report_url_hash_idx ON public.report USING btree (url_hash);
 
 CREATE INDEX url_hash_idx ON public.documents USING btree (url_hash);
 
+--
+-- Name: job_url_hash_idx; Type: INDEX; Schema: public; Owner: imgproxy
+--
+
+CREATE INDEX job_url_hash_idx ON public.jobs USING btree (url_hash);
 
 --
 -- PostgreSQL database dump complete

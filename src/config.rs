@@ -38,13 +38,11 @@ pub struct VideoConfig {
     pub sns_topic_arn: String,
     pub role_arn: String,
     pub s3_jobs: usize,
-    pub queue_concurrency: usize,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct AwsConfig {
     pub region: String,
-    pub s3_jobs: usize,
     pub rekognition_jobs: usize,
     pub video: Option<VideoConfig>,
 }

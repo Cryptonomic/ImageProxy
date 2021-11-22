@@ -7,7 +7,7 @@ use crate::aws::errors::AwsError;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, info};
 
 use messages::RekognitionResponse;
 
@@ -19,7 +19,9 @@ use crate::{
     config::VideoConfig,
     document::Document,
     moderation::{ModerationProvider, ModerationResponse, ModerationService, SupportedMimeTypes},
+    proxy::Context,
     rpc::error::Errors,
+    rpc::responses::ModerationStatus,
 };
 
 use messages::Label;
@@ -30,7 +32,6 @@ use tokio::time::{self, Duration};
 pub struct Rekognition {
     pub region: String,
     pub rekognition_permits: Arc<Semaphore>,
-    pub s3_permits: Arc<Semaphore>,
     pub video_config: Option<VideoConfig>,
     pub client: Option<ClientRekognition>,
 }
@@ -40,21 +41,23 @@ impl ModerationProvider for Rekognition {
     async fn moderate(
         &self,
         document: &Document,
-    ) -> Result<crate::moderation::ModerationResponse, Errors> {
+        context: Arc<Context>,
+    ) -> Result<Option<crate::moderation::ModerationResponse>, Errors> {
         debug!("New Rekognition request");
 
-        match self.get_moderation_labels(document).await {
-            Ok(result) => {
+        match self.get_moderation_labels(document, context).await {
+            Ok(Some(result)) => {
                 let labels = result.get_labels();
                 debug!(
                     "Moderation labels for id={}, labels={:?}",
                     document.id, labels
                 );
-                Ok(ModerationResponse {
+                Ok(Some(ModerationResponse {
                     categories: labels,
                     provider: ModerationService::Aws,
-                })
+                }))
             }
+            Ok(None) => Ok(None),
             Err(e) => {
                 error!("Moderation failed, reason:{}", e);
                 Err(Errors::ModerationFailed)
@@ -73,7 +76,7 @@ impl ModerationProvider for Rekognition {
 
     fn max_document_size(&self, document_type: &SupportedMimeTypes) -> u64 {
         match document_type {
-            SupportedMimeTypes::VideoMp4 => 10737418240,
+            SupportedMimeTypes::VideoMp4 | SupportedMimeTypes::VideoMov => 10737418240,
             _ => 5242880,
         }
         // As per AWS documentation, 5 MB binary limit for images
@@ -116,9 +119,9 @@ impl Rekognition {
     // TODO : Add support for nextToken
 
     pub async fn get_moderation_results(
-        &self,
         client: &ClientRekognition,
         job_id: String,
+        rekognition_permits: Arc<Semaphore>,
     ) -> Result<RekognitionResponse, AwsError> {
         let mut backoff: u64 = 1;
         let mut labels: Option<Vec<Label>> = None;
@@ -126,7 +129,7 @@ impl Rekognition {
         debug!("waiting for moderation results after recieving job id ");
 
         loop {
-            let _permit = self.rekognition_permits.clone().acquire_owned().await?;
+            let _permit = rekognition_permits.clone().acquire_owned().await?;
             let mut pagination_token: Option<String> = None;
 
             let r = client
@@ -182,7 +185,8 @@ impl Rekognition {
     pub async fn get_moderation_labels(
         &self,
         document: &Document,
-    ) -> Result<RekognitionResponse, AwsError> {
+        context: Arc<Context>,
+    ) -> Result<Option<RekognitionResponse>, AwsError> {
         let bytes: &hyper::body::Bytes = &document.bytes;
         if document.is_video() {
             if self.video_config.is_none() {
@@ -196,7 +200,8 @@ impl Rekognition {
                 let role_arn = &self.video_config.as_ref().unwrap().role_arn;
 
                 let region = aws_sdk_s3::Region::new(self.region.as_str().to_owned());
-                //we need this future to setup client , hence we can't set up the client in new ,as new is
+                //we need this future to setup client ,
+                //hence we can't set up the client in new ,as new is
                 //not async
 
                 let shared_config = aws_config::from_env().region(region).load().await;
@@ -219,18 +224,84 @@ impl Rekognition {
                     .start_video_moderation(&client_rekognition, channel, bucket, &document.url)
                     .await?;
 
+                if let Err(e) = context
+                    .database
+                    .add_job(&job_id, &document.url, &ModerationStatus::Pending)
+                    .await
+                {
+                    error!("{}", e);
+                }
                 // get reuslts
-                let response = self
-                    .get_moderation_results(&client_rekognition, job_id)
-                    .await?;
+                let reko_permit = self.rekognition_permits.clone();
+                let ctx = context.clone();
+                let id = document.id;
+                let url = document.url.clone();
 
-                Ok(response)
+                tokio::task::spawn(async move {
+                    match Rekognition::get_moderation_results(
+                        &client_rekognition,
+                        job_id.clone(),
+                        reko_permit,
+                    )
+                    .await
+                    {
+                        Ok(r) => {
+                            let labels = r.get_labels();
+
+                            let blocked = !labels.is_empty();
+
+                            match ctx
+                                .database
+                                .add_moderation_result(
+                                    &url,
+                                    ModerationService::Aws,
+                                    blocked,
+                                    &labels,
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    info!("Database updated for id={}", id);
+                                    if let Err(e) = ctx.database.delete_job(&url).await {
+                                        error!(
+                                            "Failed to remove completed job, job_id={}, reason={}",
+                                            job_id, e
+                                        )
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Database not updated for id={}, reason={}", id, e)
+                                }
+                            };
+                        } //
+                        Err(e) => {
+                            if let Err(e) = ctx
+                                .database
+                                .update_job_status(&url, &ModerationStatus::Failed)
+                                .await
+                            {
+                                error!(
+                                    "Failed to update job status, job_id={}, reason={}",
+                                    job_id, e
+                                )
+                            }
+                            error!("{}", e)
+                        }
+                    }
+                });
+                // let _response = task.await.unwrap()?;
+
+                /*   let resp: RekognitionResponse = RekognitionResponse {
+                    ModerationLabels: vec![],
+                    ModerationModelVersion: "".into(),
+                }; */
+
+                Ok(None)
             }
         } else if document.is_image() {
             let region = Region::new(self.region.clone());
             let shared_config = aws_config::from_env().region(region).load().await;
             let client = ClientRekognition::new(&shared_config);
-
             let req = client.detect_moderation_labels();
             let blob = Blob::new(bytes.as_ref()); //.to_vec());
             let img = Image::builder().bytes(blob).build();
@@ -239,7 +310,7 @@ impl Rekognition {
             match response {
                 Ok(output) => {
                     let rekognition_repsonse: RekognitionResponse = output.into();
-                    Ok(rekognition_repsonse)
+                    Ok(Some(rekognition_repsonse))
                 }
                 Err(e) => Err(e.to_string().into()),
             }
@@ -250,14 +321,12 @@ impl Rekognition {
 
     pub fn new(
         aws_region: &str,
-        s3_jobs: &usize,
         rekognition_jobs: &usize,
         video_config: &Option<VideoConfig>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Rekognition {
             region: aws_region.to_string(),
             rekognition_permits: Arc::new(Semaphore::new(*rekognition_jobs)),
-            s3_permits: Arc::new(Semaphore::new(*s3_jobs)),
             video_config: video_config.clone(),
             client: None,
         })

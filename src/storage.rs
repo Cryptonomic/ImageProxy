@@ -38,8 +38,12 @@ impl StorageService {
         match config.moderation.provider {
             ModerationService::Aws => match &config.moderation.aws {
                 Some(aws_config) => {
-                    let s =
-                        S3::new(&aws_config.region, "nft-mediaproxy", &aws_config.s3_jobs).await;
+                    let s3_permits = &aws_config
+                        .video
+                        .as_ref()
+                        .expect("video config not set for aws")
+                        .s3_jobs;
+                    let s = S3::new(&aws_config.region, "nft-mediaproxy", s3_permits).await;
                     Ok(Box::new(s))
                 }
                 None => Err("Moderation provider configuration is missing".into()),

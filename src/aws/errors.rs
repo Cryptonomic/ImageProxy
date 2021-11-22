@@ -176,7 +176,7 @@ impl fmt::Display for AwsService {
 pub struct AwsErrorDetails {
     service: AwsService,
     proxy_msg: String,
-    error: Box<dyn std::error::Error>,
+    error: Box<dyn std::error::Error + Send + Sync>,
 }
 
 #[derive(Debug)]
@@ -187,6 +187,9 @@ pub enum AwsError {
     CorruptResponse(AwsErrorDetails),
     Other(String),
 }
+
+unsafe impl Send for AwsError {}
+unsafe impl Sync for AwsError {}
 
 impl std::error::Error for AwsError {}
 

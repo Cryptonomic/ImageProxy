@@ -1,7 +1,6 @@
 pub mod error;
 pub mod requests;
 pub mod responses;
-pub mod task;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,8 +21,6 @@ use crate::{
 
 use requests::*;
 use responses::*;
-
-use task::VideoModerationTask;
 
 /// rpc version information
 pub static VERSION: &str = "1.0.0";
@@ -110,15 +107,21 @@ pub async fn fetch(
 
             // Resize the image if required or reformat to png if required
             if document.is_image() {
-                let mod_response = if (document.bytes.len() as u64 >= max_document_size
-                    || !supported_types.contains(&document_type))
-                    && document.is_image()
+                let mod_response = if document.bytes.len() as u64 >= max_document_size
+                    || !supported_types.contains(&document_type)
                 {
                     let resized_doc = document.resize_image(max_document_size)?;
-                    ctx.moderation_provider.moderate(&resized_doc).await?
+                    ctx.moderation_provider
+                        .moderate(&resized_doc, ctx.clone())
+                        .await?
                 } else {
-                    ctx.moderation_provider.moderate(&document).await?
+                    ctx.moderation_provider
+                        .moderate(&document, ctx.clone())
+                        .await?
                 };
+
+                let mod_response =
+                    mod_response.expect("error: Image moderation returned a pending status");
 
                 metrics::TRAFFIC
                     .with_label_values(&["moderated"])
@@ -158,12 +161,19 @@ pub async fn fetch(
                 let _ctx = ctx.clone();
                 let _req_id = *req_id;
                 let _url = params.url.to_owned();
+                //let job_exists = ctx.database.job_exists(&document.url).await.unwrap();
 
-                ctx.queue
-                    .spawn(VideoModerationTask::new(ctx.clone(), *req_id, _url).await)
-                    .await;
+                if !ctx.database.job_exists(&document.url).await.unwrap() {
+                    let _ = ctx
+                        .moderation_provider
+                        .moderate(&document, ctx.clone())
+                        .await;
+                }
 
-                (ModerationStatus::Pending, vec![], Some(document.clone()))
+                let status: ModerationStatus =
+                    ctx.database.job_status(&document.url).await.unwrap();
+
+                (status, vec![], Some(document.clone()))
             }
         }
     };
@@ -191,7 +201,7 @@ pub async fn describe(
     let mut awaiting: HashSet<String> = HashSet::new();
 
     for u in params.urls.iter() {
-        if ctx.queue.job_exists(u.to_string()).await {
+        if let Ok(true) = ctx.database.job_exists(&u.to_string()).await {
             awaiting.insert(u.to_string());
         }
     }

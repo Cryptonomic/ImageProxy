@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hyper::{Body, Response};
 use log::error;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
@@ -24,11 +24,12 @@ pub enum RpcStatus {
     Err,
 }
 
-#[derive(Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq)]
 pub enum ModerationStatus {
     Allowed,
     Blocked,
     Pending,
+    Failed,
 }
 
 impl From<bool> for ModerationStatus {

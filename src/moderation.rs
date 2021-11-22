@@ -4,8 +4,11 @@ use async_trait::async_trait;
 use log::warn;
 use serde::{Deserialize, Serialize};
 //use uuid::Uuid;
+use std::sync::Arc;
 
-use crate::{aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors};
+use crate::{
+    aws::Rekognition, config::Configuration, document::Document, proxy::Context, rpc::error::Errors,
+};
 
 #[derive(PartialEq)]
 pub enum SupportedMimeTypes {
@@ -59,7 +62,11 @@ pub struct ModerationResponse {
 /// A trait that all moderation services must implement
 #[async_trait]
 pub trait ModerationProvider: Send + Sync {
-    async fn moderate(&self, document: &Document) -> Result<ModerationResponse, Errors>;
+    async fn moderate(
+        &self,
+        document: &Document,
+        context: Arc<Context>,
+    ) -> Result<Option<ModerationResponse>, Errors>;
     fn supported_types(&self) -> Vec<SupportedMimeTypes>;
     fn max_document_size(&self, document_type: &SupportedMimeTypes) -> u64;
 }
@@ -69,11 +76,15 @@ pub struct NullProvider {}
 
 #[async_trait]
 impl ModerationProvider for NullProvider {
-    async fn moderate(&self, _: &Document) -> Result<ModerationResponse, Errors> {
-        Ok(ModerationResponse {
+    async fn moderate(
+        &self,
+        _: &Document,
+        _context: Arc<Context>,
+    ) -> Result<Option<ModerationResponse>, Errors> {
+        Ok(Some(ModerationResponse {
             categories: Vec::new(),
             provider: ModerationService::None,
-        })
+        }))
     }
 
     fn supported_types(&self) -> Vec<SupportedMimeTypes> {
@@ -102,7 +113,6 @@ impl ModerationService {
                 Some(aws_config) => {
                     let s = Rekognition::new(
                         &aws_config.region,
-                        &aws_config.s3_jobs,
                         &aws_config.rekognition_jobs,
                         &aws_config.video.clone(),
                     )?;
