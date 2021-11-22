@@ -16,7 +16,6 @@ log = "0.4"
 log4rs = "1"
 hocon = "0.7"
 sha2 = "0.9"
-hmac = "0.11"
 hex = "0.4"
 base64 = "0.13"
 hyper-tls = "0.5"
@@ -34,6 +33,12 @@ image = "0.23"
 dns-lookup = "1"
 anyhow = "1.0"
 rust-embed="6.0.0"
+
+# deps for aws
+aws-config = "0.0.25-alpha"
+aws-sdk-rekognition = "0.0.25-alpha"
+aws-sdk-s3 = "0.0.25-alpha"
+aws-types = "0.0.25-alpha"
 
 # Overrides to address vulns
 time = "0.3"
