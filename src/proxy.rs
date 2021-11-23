@@ -60,9 +60,9 @@ impl Context {
             config.ipfs.clone(),
             config.max_document_size,
             uri_filters,
-            config.timeout
+            config.timeout,
         );
-        Ok(Context{
+        Ok(Context {
             config: config.clone(),
             database,
             moderation_provider,
@@ -87,7 +87,6 @@ pub fn authenticate(api_keys: &[String], req: &Request<Body>) -> bool {
 
 pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
-    metrics::ACTIVE_CLIENTS.inc();
     let response_time_start = Utc::now().timestamp_millis();
     let proxy_config = ctx.config.clone();
     let response = match (req.method(), req.uri().path()) {
@@ -145,7 +144,6 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     metrics::API_RESPONSE_TIME
         .with_label_values(&["overall"])
         .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
-    metrics::ACTIVE_CLIENTS.dec();
 
     response.or_else(|e| {
         metrics::ERRORS.inc();

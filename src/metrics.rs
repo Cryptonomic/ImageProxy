@@ -24,8 +24,6 @@ lazy_static! {
         50000.0 * 1024_f64,
     ];
     pub static ref REGISTRY: Registry = Registry::new();
-    pub static ref ACTIVE_CLIENTS: IntGauge =
-        IntGauge::new("active_clients", "Active clients").unwrap();
     pub static ref ERRORS: IntCounter = IntCounter::new("errors", "Total errors").unwrap();
     pub static ref HITS: IntCounter = IntCounter::new("hits", "Total hits").unwrap();
     pub static ref CACHE_METRICS: IntGaugeVec = IntGaugeVec::new(
@@ -71,7 +69,6 @@ lazy_static! {
 }
 
 pub fn init_registry() {
-    REGISTRY.register(Box::new(ACTIVE_CLIENTS.clone())).unwrap();
     REGISTRY.register(Box::new(HITS.clone())).unwrap();
     REGISTRY.register(Box::new(MODERATION.clone())).unwrap();
     REGISTRY.register(Box::new(API_REQUESTS.clone())).unwrap();
