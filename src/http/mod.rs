@@ -173,11 +173,13 @@ impl HttpClient {
                     if let Some(err_ref) = e.source() {
                         if let Some(err) = err_ref.downcast_ref::<std::io::Error>() {
                             if let ErrorKind::TimedOut = err.kind() {
+                                metrics::HTTP_CLIENT_CODES.with_label_values(&["991"]).inc();
                                 error!("Unable to fetch document, connection/response/request to the server timed out, id={}", req_id);
                                 return Err(Errors::TimedOut);
                             }
                         }
                     }
+                    metrics::HTTP_CLIENT_CODES.with_label_values(&["990"]).inc();
                     error!(
                         "Unable to fetch document, id={}, reason={}, url={}",
                         req_id, e, url
