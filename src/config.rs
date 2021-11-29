@@ -43,6 +43,17 @@ pub struct ModerationConfig {
     pub labels: Vec<String>, //TODO
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct ApiKey {
+    pub name: String,
+    pub key: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct SecurityConfig {
+    pub api_keys: Vec<ApiKey>,
+}
+
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct Configuration {
@@ -55,7 +66,7 @@ pub struct Configuration {
     pub metrics_enabled: bool,
     pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
-    pub api_keys: Vec<String>,
+    pub security: SecurityConfig,
     pub database: DatabaseConfig,
     pub moderation: ModerationConfig,
     pub cache_config: CacheConfig,

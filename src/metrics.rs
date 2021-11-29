@@ -42,6 +42,11 @@ lazy_static! {
         &["method"]
     )
     .unwrap();
+    pub static ref API_KEY_USAGE: IntCounterVec = IntCounterVec::new(
+        Opts::new("api_key_usage", "Api key usage metrics by descriptive name"),
+        &["api_key_name"]
+    )
+    .unwrap();
     pub static ref HTTP_CLIENT_CODES: IntCounterVec = IntCounterVec::new(
         Opts::new("http_client_codes", "HTTP Client status codes"),
         &["status_code"]
@@ -80,6 +85,7 @@ pub fn init_registry() {
     REGISTRY
         .register(Box::new(API_RESPONSE_TIME.clone()))
         .unwrap();
+    REGISTRY.register(Box::new(API_KEY_USAGE.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT_SIZE.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT_TYPE.clone())).unwrap();

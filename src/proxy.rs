@@ -2,6 +2,7 @@ extern crate bb8_postgres;
 extern crate tokio_postgres;
 
 use crate::cache::{get_cache, Cache};
+use crate::config::SecurityConfig;
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
 
@@ -27,7 +28,7 @@ use crate::{
 use chrono::Utc;
 
 use hyper::{Body, Method, Request, Response, StatusCode};
-use log::error;
+use log::{debug, error};
 use prometheus::Encoder;
 use rust_embed::RustEmbed;
 use serde::de;
@@ -72,10 +73,21 @@ impl Context {
     }
 }
 
-pub fn authenticate(api_keys: &[String], req: &Request<Body>) -> bool {
+pub fn authenticate(security_config: &SecurityConfig, req: &Request<Body>, req_id: &Uuid) -> bool {
     match req.headers().get("apikey") {
         Some(h) => match String::from_utf8(h.as_bytes().to_vec()) {
-            Ok(key) => api_keys.contains(&key),
+            Ok(key) => {
+                if let Some(api_key) = security_config.api_keys.iter().find(|k| k.key.eq(&key)) {
+                    metrics::API_KEY_USAGE
+                        .with_label_values(&[api_key.name.as_str()])
+                        .inc();
+                    debug!("Authorized key_name={}, req_id={}", &api_key.name, req_id);
+                    true
+                } else {
+                    debug!("Authorization failed for req_id={}", req_id);
+                    false
+                }
+            }
             Err(e) => {
                 error!("Unable to convert api key header to string, reason={}", e);
                 false
@@ -89,10 +101,10 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
     metrics::HITS.inc();
     let response_time_start = Utc::now().timestamp_millis();
     let proxy_config = ctx.config.clone();
+    let req_id = Uuid::new_v4();
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if authenticate(&ctx.config.api_keys.clone(), req.borrow()) {
-                let req_id = Uuid::new_v4();
+            if authenticate(&ctx.config.security, req.borrow(), &req_id) {
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     Ok(e.to_response(&req_id, &proxy_config))
