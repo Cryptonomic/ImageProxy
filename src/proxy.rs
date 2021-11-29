@@ -3,6 +3,7 @@ extern crate tokio_postgres;
 
 use crate::cache::{get_cache, Cache};
 use crate::config::SecurityConfig;
+use crate::db::{DatabaseFactory, DatabaseProvider};
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
 
@@ -11,6 +12,7 @@ use crate::http::filters::UriFilter;
 use crate::http::{HttpClientFactory, HttpClientWrapper};
 use crate::metrics;
 use crate::metrics::REGISTRY;
+use crate::moderation::{ModerationProvider, ModerationService};
 use crate::rpc::*;
 use crate::{built_info, rpc::error::Errors};
 use crate::{
@@ -19,10 +21,6 @@ use crate::{
         requests::{DescribeRequest, FetchRequest, MethodHeader, ReportRequest, RpcMethods},
         responses::Info,
     },
-};
-use crate::{
-    db::Database,
-    moderation::{ModerationProvider, ModerationService},
 };
 
 use chrono::Utc;
@@ -43,7 +41,7 @@ struct Asset;
 
 pub struct Context {
     pub config: Configuration,
-    pub database: Database,
+    pub database: Box<dyn DatabaseProvider + Send + Sync>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client_provider: HttpClientWrapper,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
@@ -51,7 +49,7 @@ pub struct Context {
 
 impl Context {
     pub async fn new(config: Configuration) -> Result<Context, GenericError> {
-        let database = Database::new(&config.database).await?;
+        let database = DatabaseFactory::get_provider(&config.database).await?;
         let moderation_provider = ModerationService::get_provider(&config)?;
         let dns_resolver = StandardDnsResolver {};
         //TODO: Add more filters here
