@@ -4,10 +4,10 @@ extern crate tokio_postgres;
 use crate::cache::{get_cache, Cache};
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
-use crate::http::HttpClient;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::http::filters::UriFilter;
+use crate::http::{HttpClientFactory, HttpClientWrapper};
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::rpc::*;
@@ -44,7 +44,7 @@ pub struct Context {
     pub config: Configuration,
     pub database: Database,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
-    pub http_client: HttpClient,
+    pub http_client_provider: HttpClientWrapper,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
 }
 
@@ -56,7 +56,7 @@ impl Context {
         //TODO: Add more filters here
         let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
             vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
-        let http_client = HttpClient::new(
+        let http_client = HttpClientFactory::get_provider(
             config.ipfs.clone(),
             config.max_document_size,
             uri_filters,
@@ -66,7 +66,7 @@ impl Context {
             config: config.clone(),
             database,
             moderation_provider,
-            http_client,
+            http_client_provider: http_client,
             cache: get_cache(&config.cache_config),
         })
     }

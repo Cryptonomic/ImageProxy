@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 #[cfg(not(target_os = "macos"))]
 use prometheus::process_collector::ProcessCollector;
 use prometheus::{
-    HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
+    HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGaugeVec, Opts, Registry,
 };
 
 lazy_static! {
@@ -52,6 +52,11 @@ lazy_static! {
         &["status"]
     )
     .unwrap();
+    pub static ref DOCUMENT_TYPE: IntCounterVec = IntCounterVec::new(
+        Opts::new("document_type", "Document types by mime"),
+        &["mime_types"]
+    )
+    .unwrap();
     pub static ref TRAFFIC: IntCounterVec =
         IntCounterVec::new(Opts::new("traffic", "Traffic stats in bytes"), &["metric"]).unwrap();
     pub static ref MODERATION: IntCounterVec =
@@ -77,6 +82,7 @@ pub fn init_registry() {
         .unwrap();
     REGISTRY.register(Box::new(DOCUMENT_SIZE.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT.clone())).unwrap();
+    REGISTRY.register(Box::new(DOCUMENT_TYPE.clone())).unwrap();
     REGISTRY.register(Box::new(ERRORS.clone())).unwrap();
     REGISTRY.register(Box::new(CACHE_METRICS.clone())).unwrap();
     REGISTRY.register(Box::new(TRAFFIC.clone())).unwrap();

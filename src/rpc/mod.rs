@@ -42,7 +42,7 @@ async fn fetch_document(
     if let Some(doc) = cached_doc {
         Ok(doc)
     } else {
-        let document = Arc::new(ctx.http_client.fetch(req_id, url).await?);
+        let document = Arc::new(ctx.http_client_provider.fetch(req_id, url).await?);
         if SupportedMimeTypes::from_string(&document.content_type)
             == SupportedMimeTypes::Unsupported
         {
