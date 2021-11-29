@@ -257,3 +257,49 @@ async fn rpc(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::config::ApiKey;
+
+    use super::*;
+
+    fn build_request(key: &str) -> Request<Body> {
+        Request::builder()
+            .header("apikey", key)
+            .body(Body::from(""))
+            .unwrap()
+    }
+
+    #[test]
+    fn test_authenticate_fn() {
+        let api_keys = vec![
+            ApiKey {
+                name: "test_key1".to_string(),
+                key: "1234".to_string(),
+            },
+            ApiKey {
+                name: "test_key2".to_string(),
+                key: "abcd".to_string(),
+            },
+        ];
+        let security_config = SecurityConfig { api_keys };
+        let req_id = Uuid::new_v4();
+
+        // Key in api_key list
+        let req = build_request("1234");
+        assert!(authenticate(&security_config, &req, &req_id));
+
+        // Key in api_key list
+        let req = build_request("abcd");
+        assert!(authenticate(&security_config, &req, &req_id));
+
+        // Key not in api_key list
+        let req = build_request("0000");
+        assert!(!authenticate(&security_config, &req, &req_id));
+
+        // No header specified
+        let req = Request::builder().body(Body::from("")).unwrap();
+        assert!(!authenticate(&security_config, &req, &req_id));
+    }
+}
