@@ -151,3 +151,50 @@ impl HttpClientFactory {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dns::StandardDnsResolver;
+    use filters::private_network::PrivateNetworkFilter;
+
+    #[test]
+    fn test_to_uri_fn() {
+        let ipfs_config = Host {
+            protocol: "https".to_string(),
+            host: "localhost".to_string(),
+            port: 1337,
+            path: "/ipfs".to_string(),
+        };
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> = vec![Box::new(
+            PrivateNetworkFilter::new(Box::new(StandardDnsResolver {})),
+        )];
+        let wrapper = HttpClientFactory::get_provider(ipfs_config, None, uri_filters, 10_u64);
+
+        // Valid https url
+        let result = wrapper.to_uri("https://localhost:3422/image.png");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().to_string(),
+            "https://localhost:3422/image.png"
+        );
+
+        // Valid ipfs url
+        let result = wrapper.to_uri("ipfs://CID");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().to_string(),
+            "https://localhost:1337/ipfs/CID"
+        );
+
+        // Invalid url
+        let result = wrapper.to_uri("ipfs:/CID");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), Errors::InvalidUri);
+
+        // Unsupported url scheme
+        let result = wrapper.to_uri("sftp://localhost/image.png");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), Errors::UnsupportedUriScheme);
+    }
+}
