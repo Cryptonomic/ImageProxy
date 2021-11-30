@@ -38,6 +38,7 @@ impl ModerationProvider for Rekognition {
                         let name = l.name.unwrap(); // This is safe
                         Rekognition::normalize_category(name.as_str())
                     })
+                    .filter(|l| *l != ModerationCategories::Unknown)
                     .collect();
 
                 debug!(
@@ -91,7 +92,10 @@ impl Rekognition {
             "Alcohol" => ModerationCategories::Alcohol,
             "Gambling" => ModerationCategories::Gambling,
             "Hate" => ModerationCategories::Hate,
-            _ => ModerationCategories::Unknown,
+            _ => {
+                error!("Unknown moderation category encountered, cat={}", input);
+                ModerationCategories::Unknown
+            }
         }
     }
 
