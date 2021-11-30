@@ -41,8 +41,21 @@ impl HttpClientWrapper {
         })?;
 
         match uri.scheme() {
-            Some(s) if s.eq(&Scheme::HTTP) | s.eq(&Scheme::HTTPS) => Ok(uri),
+            Some(s) if s.eq(&Scheme::HTTP) | s.eq(&Scheme::HTTPS) => {
+                metrics::URI_DESTINATION_PROTOCOL
+                    .with_label_values(&[s.to_string().to_ascii_lowercase().as_str()])
+                    .inc();
+                if let Some(hostname) = uri.host() {
+                    metrics::URI_DESTINATION_HOST
+                        .with_label_values(&[hostname])
+                        .inc();
+                }
+                Ok(uri)
+            }
             Some(s) if s.to_string().eq_ignore_ascii_case("ipfs") => {
+                metrics::URI_DESTINATION_PROTOCOL
+                    .with_label_values(&["ipfs"])
+                    .inc();
                 match url
                     .strip_prefix("ipfs://")
                     .or_else(|| url.strip_prefix("IPFS://"))
@@ -62,10 +75,14 @@ impl HttpClientWrapper {
                             ipfs_path
                         );
                         debug!("Ipfs gateway path: {}", gateway_url);
-                        gateway_url.parse::<Uri>().map_err(|e| {
+                        let ipfs_uri = gateway_url.parse::<Uri>().map_err(|e| {
                             error!("Error parsing url={}, reason={}", url, e);
                             Errors::InvalidUri
-                        })
+                        });
+                        metrics::URI_DESTINATION_HOST
+                            .with_label_values(&[self.ipfs_config.host.as_str()])
+                            .inc();
+                        ipfs_uri
                     }
                     None => Err(Errors::InvalidUri),
                 }
@@ -191,6 +208,11 @@ mod tests {
         let result = wrapper.to_uri("ipfs:/CID");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), Errors::InvalidUri);
+
+        // Relative urls are not valid
+        let result = wrapper.to_uri("/CID/image.png");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), Errors::UnsupportedUriScheme);
 
         // Unsupported url scheme
         let result = wrapper.to_uri("sftp://localhost/image.png");

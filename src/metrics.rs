@@ -76,6 +76,16 @@ lazy_static! {
         "Number of times the filter blocked a host"
     )
     .unwrap();
+    pub static ref URI_DESTINATION_HOST: IntCounterVec = IntCounterVec::new(
+        Opts::new("uri_source", "Counts requests by destination hostname"),
+        &["hostname"]
+    )
+    .unwrap();
+    pub static ref URI_DESTINATION_PROTOCOL: IntCounterVec = IntCounterVec::new(
+        Opts::new("uri_protocol", "Counts requests by protocol scheme"),
+        &["protocol"]
+    )
+    .unwrap();
 }
 
 pub fn init_registry() {
@@ -86,6 +96,9 @@ pub fn init_registry() {
         .register(Box::new(API_RESPONSE_TIME.clone()))
         .unwrap();
     REGISTRY.register(Box::new(API_KEY_USAGE.clone())).unwrap();
+    REGISTRY
+        .register(Box::new(HTTP_CLIENT_CODES.clone()))
+        .unwrap();
     REGISTRY.register(Box::new(DOCUMENT_SIZE.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT_TYPE.clone())).unwrap();
@@ -95,7 +108,12 @@ pub fn init_registry() {
     REGISTRY
         .register(Box::new(URI_FILTER_BLOCKED.clone()))
         .unwrap();
-
+    REGISTRY
+        .register(Box::new(URI_DESTINATION_HOST.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(URI_DESTINATION_PROTOCOL.clone()))
+        .unwrap();
     #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();
     #[cfg(not(target_os = "macos"))]
