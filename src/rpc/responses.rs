@@ -132,9 +132,8 @@ impl FetchResponse {
         config: &Configuration,
     ) -> Response<Body> {
         match response_type {
-            ResponseType::Raw => document.map_or_else(
-                || Errors::InternalError.to_response(req_id, config),
-                |doc| {
+            ResponseType::Raw => {
+                if let Some(doc) = document {
                     metrics::TRAFFIC
                         .with_label_values(&["served"])
                         .inc_by(doc.bytes.len() as u64);
@@ -144,8 +143,17 @@ impl FetchResponse {
                         .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
                         .body(Body::from(doc.bytes.clone()))
                         .unwrap_or_default()
-                },
-            ),
+                } else {
+                    FetchResponse::to_response(
+                        &ResponseType::Json,
+                        None,
+                        moderation_status,
+                        categories,
+                        req_id,
+                        config,
+                    )
+                }
+            }
             ResponseType::Json => {
                 let result = FetchResponse {
                     jsonrpc: String::from(VERSION),

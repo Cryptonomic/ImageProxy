@@ -122,6 +122,12 @@ pub async fn fetch(
             let blocked = !mod_response.categories.is_empty();
             let mod_status: ModerationStatus = blocked.into();
 
+            let document = if !blocked || params.force {
+                Some(document)
+            } else {
+                None
+            };
+
             if blocked {
                 metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
             }
@@ -142,7 +148,7 @@ pub async fn fetch(
                     error!("Database not updated for id={}, reason={}", req_id, e)
                 }
             };
-            (mod_status, categories, Some(document.clone()))
+            (mod_status, categories, document)
         }
     };
 
