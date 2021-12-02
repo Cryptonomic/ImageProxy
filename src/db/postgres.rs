@@ -12,10 +12,7 @@ use std::time::Duration;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
-use super::{DatabaseProvider, DbModerationRow, DbReportRow};
-
-type GenericError = Box<dyn std::error::Error + Send + Sync>;
-type Result<T> = std::result::Result<T, GenericError>;
+use super::{DatabaseProvider, DbModerationRow, DbReportRow, Result};
 
 #[derive(Clone)]
 pub struct PostgresDatabase {

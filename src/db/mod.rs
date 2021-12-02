@@ -7,11 +7,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+mod dummy_db;
 mod postgres;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, GenericError>;
 
+#[derive(Clone)]
 pub struct DbModerationRow {
     pub blocked: bool,
     pub categories: Vec<ModerationCategories>,
@@ -19,6 +21,7 @@ pub struct DbModerationRow {
     pub url: String,
 }
 
+#[derive(Clone)]
 pub struct DbReportRow {
     pub id: String,
     pub url: String,
