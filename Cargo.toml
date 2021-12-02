@@ -36,10 +36,10 @@ rust-embed="6.3"
 jemallocator = { version = "0.3", optional = true }
 
 # deps for aws
-aws-config = "0.0.26-alpha"
-aws-sdk-rekognition = "0.0.26-alpha"
-aws-sdk-s3 = "0.0.26-alpha"
-aws-types = "0.0.26-alpha"
+aws-config = "0.2"
+aws-sdk-rekognition = "0.2"
+aws-sdk-s3 = "0.2"
+aws-types = "0.2"
 
 # Overrides to address vulns
 time = "0.3"
