@@ -10,7 +10,6 @@ use super::{
     requests::ResponseType,
 };
 use crate::{
-    config::Configuration,
     document::Document,
     metrics,
     moderation::{ModerationCategories, ModerationService},
@@ -129,7 +128,6 @@ impl FetchResponse {
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
         req_id: &Uuid,
-        config: &Configuration,
     ) -> Response<Body> {
         match response_type {
             ResponseType::Raw => {
@@ -150,7 +148,6 @@ impl FetchResponse {
                         moderation_status,
                         categories,
                         req_id,
-                        config,
                     )
                 }
             }

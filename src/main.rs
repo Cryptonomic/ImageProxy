@@ -48,13 +48,16 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
-    let proxy = Arc::new(Context::new(config).await?);
+    let config = Arc::new(config);
+    let context = Arc::new(Context::new(config.clone()).await?);
     let service = make_service_fn(move |_| {
-        let proxy = proxy.clone();
+        let context = context.clone();
+        let config = config.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                let proxy = proxy.to_owned();
-                route(proxy, req)
+                let context = context.to_owned();
+                let config = config.to_owned();
+                route(context, config, req)
             }))
         }
     });

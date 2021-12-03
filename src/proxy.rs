@@ -41,7 +41,6 @@ type GenericError = Box<dyn std::error::Error + Send + Sync>;
 struct Asset;
 
 pub struct Context {
-    pub config: Configuration,
     pub database: Box<dyn DatabaseProvider + Send + Sync>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client_provider: HttpClientWrapper,
@@ -49,7 +48,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn new(config: Configuration) -> Result<Context, GenericError> {
+    pub async fn new(config: Arc<Configuration>) -> Result<Context, GenericError> {
         let database = DatabaseFactory::get_provider(&config.database).await?;
         let moderation_provider = ModerationService::get_provider(&config)?;
         let dns_resolver = StandardDnsResolver {};
@@ -63,7 +62,6 @@ impl Context {
             config.timeout,
         );
         Ok(Context {
-            config: config.clone(),
             database,
             moderation_provider,
             http_client_provider: http_client,
@@ -97,9 +95,10 @@ pub fn authenticate(security_config: &SecurityConfig, req: &Request<Body>, req_i
 }
 
 fn with_cors(
-    cors_config: &Cors,
     mut response: Response<Body>,
+    cors_config: &Cors,
 ) -> Result<Response<Body>, GenericError> {
+    // TODO: Cors header configs should be validated at startup
     let cors_origin: HeaderValue = cors_config.origin.to_owned().parse()?;
     response
         .headers_mut()
@@ -107,61 +106,60 @@ fn with_cors(
     Ok(response)
 }
 
-pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
+fn empty_response(code: StatusCode) -> Result<Response<Body>, GenericError> {
+    Ok(Response::builder()
+        .status(code)
+        .body(Body::default())
+        .unwrap_or_default())
+}
+
+pub async fn route(
+    ctx: Arc<Context>,
+    config: Arc<Configuration>,
+    req: Request<Body>,
+) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
     let response_time_start = Utc::now().timestamp_millis();
-    let cors_config = ctx.config.cors.clone();
+    let cors_config = config.cors.clone();
     let req_id = Uuid::new_v4();
     let result = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if authenticate(&ctx.config.security, req.borrow(), &req_id) {
+            if authenticate(&config.security, req.borrow(), &req_id) {
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     Ok(e.to_response(&req_id))
                 })
             } else {
-                Ok(Response::builder()
-                    .status(StatusCode::FORBIDDEN)
-                    .body(Body::default())
-                    .unwrap_or_default())
+                empty_response(StatusCode::FORBIDDEN)
             }
         }
-        (&Method::GET, "/") => Ok(Response::builder()
-            .status(StatusCode::OK)
-            .body(Body::default())
-            .unwrap_or_default()),
+        (&Method::GET, "/") => empty_response(StatusCode::OK),
         (&Method::GET, "/info") => info().await,
-        (&Method::GET, "/metrics") if ctx.config.metrics_enabled => metrics(ctx).await,
-        (&Method::GET, path) if ctx.config.dashboard_enabled => {
+        (&Method::GET, "/metrics") if config.metrics_enabled => metrics(ctx).await,
+        (&Method::GET, path) if config.dashboard_enabled => {
             let file = Asset::get(&path[1..]);
             match file {
                 Some(f) => Ok(Response::builder()
                     .status(StatusCode::OK)
                     .body(Body::from(f.data.into_owned()))
                     .unwrap()),
-                None => Ok(Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Body::default())
-                    .unwrap_or_default()),
+                None => empty_response(StatusCode::NOT_FOUND),
             }
         }
-        _ => Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::default())
-            .unwrap_or_default()),
+        _ => empty_response(StatusCode::OK),
     };
 
     metrics::API_RESPONSE_TIME
         .with_label_values(&["overall"])
         .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
 
-    let response = result.unwrap_or_else(|e| {
-        metrics::ERRORS.inc();
-        error!("Unknown error, reason:{}", e);
-        Errors::InternalError.to_response(&Uuid::new_v4())
-    });
-
-    with_cors(&cors_config, response)
+    result
+        .or_else(|e| {
+            metrics::ERRORS.inc();
+            error!("Unknown error, reason:{}", e);
+            Ok(Errors::InternalError.to_response(&Uuid::new_v4()))
+        })
+        .and_then(|r| with_cors(r, &cors_config))
 }
 
 async fn info() -> Result<Response<Body>, GenericError> {
@@ -187,22 +185,14 @@ async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
 
     let encode_result = encoder.encode(&REGISTRY.gather(), &mut buffer);
     if encode_result.is_err() {
-        return Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(String::default().into())
-            .unwrap_or_default());
+        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
-    Ok(Response::builder()
+    Response::builder()
         .body(Body::from(output.unwrap_or_default()))
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(String::default().into())
-                .unwrap_or_default()
-        }))
+        .or_else(|_| empty_response(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
