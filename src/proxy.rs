@@ -2,7 +2,7 @@ extern crate bb8_postgres;
 extern crate tokio_postgres;
 
 use crate::cache::{get_cache, Cache};
-use crate::config::SecurityConfig;
+use crate::config::{Cors, SecurityConfig};
 use crate::db::{DatabaseFactory, DatabaseProvider};
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
@@ -25,6 +25,7 @@ use crate::{
 
 use chrono::Utc;
 
+use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::{debug, error};
 use prometheus::Encoder;
@@ -95,17 +96,28 @@ pub fn authenticate(security_config: &SecurityConfig, req: &Request<Body>, req_i
     }
 }
 
+fn with_cors(
+    cors_config: &Cors,
+    mut response: Response<Body>,
+) -> Result<Response<Body>, GenericError> {
+    let cors_origin: HeaderValue = cors_config.origin.to_owned().parse()?;
+    response
+        .headers_mut()
+        .insert(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, cors_origin);
+    Ok(response)
+}
+
 pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
     let response_time_start = Utc::now().timestamp_millis();
-    let proxy_config = ctx.config.clone();
+    let cors_config = ctx.config.cors.clone();
     let req_id = Uuid::new_v4();
-    let response = match (req.method(), req.uri().path()) {
+    let result = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&ctx.config.security, req.borrow(), &req_id) {
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
-                    Ok(e.to_response(&req_id, &proxy_config))
+                    Ok(e.to_response(&req_id))
                 })
             } else {
                 Ok(Response::builder()
@@ -118,35 +130,23 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
             .status(StatusCode::OK)
             .body(Body::default())
             .unwrap_or_default()),
-        (&Method::GET, "/info") => info(&ctx.config).await,
+        (&Method::GET, "/info") => info().await,
         (&Method::GET, "/metrics") if ctx.config.metrics_enabled => metrics(ctx).await,
         (&Method::GET, path) if ctx.config.dashboard_enabled => {
             let file = Asset::get(&path[1..]);
             match file {
                 Some(f) => Ok(Response::builder()
                     .status(StatusCode::OK)
-                    .header(
-                        hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &ctx.config.cors.origin.to_owned(),
-                    )
                     .body(Body::from(f.data.into_owned()))
                     .unwrap()),
                 None => Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
-                    .header(
-                        hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        &ctx.config.cors.origin.to_owned(),
-                    )
                     .body(Body::default())
                     .unwrap_or_default()),
             }
         }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .header(
-                hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                &ctx.config.cors.origin.to_owned(),
-            )
             .body(Body::default())
             .unwrap_or_default()),
     };
@@ -155,14 +155,16 @@ pub async fn route(ctx: Arc<Context>, req: Request<Body>) -> Result<Response<Bod
         .with_label_values(&["overall"])
         .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
 
-    response.or_else(|e| {
+    let response = result.unwrap_or_else(|e| {
         metrics::ERRORS.inc();
         error!("Unknown error, reason:{}", e);
-        Ok(Errors::InternalError.to_response(&Uuid::new_v4(), &proxy_config))
-    })
+        Errors::InternalError.to_response(&Uuid::new_v4())
+    });
+
+    with_cors(&cors_config, response)
 }
 
-async fn info(config: &Configuration) -> Result<Response<Body>, GenericError> {
+async fn info() -> Result<Response<Body>, GenericError> {
     let info = Info {
         package_version: built_info::PKG_VERSION,
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
@@ -171,10 +173,6 @@ async fn info(config: &Configuration) -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
-        .header(
-            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-            &config.cors.origin,
-        )
         .body(Body::from(result))
         .unwrap_or_default())
 }
@@ -198,10 +196,6 @@ async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
     let output = String::from_utf8(buffer.clone());
     buffer.clear();
     Ok(Response::builder()
-        .header(
-            hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-            &ctx.config.cors.origin,
-        )
         .body(Body::from(output.unwrap_or_default()))
         .unwrap_or_else(|_| {
             Response::builder()

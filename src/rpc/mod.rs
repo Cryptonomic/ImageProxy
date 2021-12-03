@@ -203,7 +203,6 @@ pub async fn describe(
                 RpcStatus::Ok,
                 describe_results,
                 req_id,
-                &ctx.config,
             ))
         }
         Err(e) => {
@@ -228,7 +227,6 @@ pub async fn report(
             RpcStatus::Ok,
             &params.url,
             req_id,
-            &ctx.config,
         )),
         Err(e) => {
             error!("Database not updated for id={}, reason={}", req_id, e);
@@ -254,7 +252,6 @@ pub async fn describe_report(ctx: Arc<Context>, req_id: &Uuid) -> Result<Respons
                 RpcStatus::Ok,
                 results,
                 req_id,
-                &ctx.config,
             ))
         }
         Err(e) => {
@@ -263,3 +260,6 @@ pub async fn describe_report(ctx: Arc<Context>, req_id: &Uuid) -> Result<Respons
         }
     }
 }
+
+#[cfg(test)]
+mod tests {}
