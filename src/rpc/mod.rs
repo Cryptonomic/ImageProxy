@@ -4,8 +4,6 @@ pub mod responses;
 
 use std::sync::Arc;
 
-use hyper::Body;
-use hyper::Response;
 use log::{debug, error, info};
 use uuid::Uuid;
 
@@ -61,7 +59,7 @@ pub async fn fetch(
     ctx: Arc<Context>,
     req_id: &Uuid,
     params: &FetchRequestParams,
-) -> Result<Response<Body>, Errors> {
+) -> Result<ModerationResult, Errors> {
     info!(
         "New fetch request, id={}, force={}, url={}",
         req_id, params.force, params.url
@@ -152,20 +150,21 @@ pub async fn fetch(
         }
     };
 
-    Ok(FetchResponse::to_response(
-        &params.response_type,
-        document,
+    let result = ModerationResult {
         moderation_status,
         categories,
-        req_id,
-    ))
+        data: String::default(), //TODO: This smells, refactor away without breaking API
+        document,
+    };
+
+    Ok(result)
 }
 
 pub async fn describe(
     ctx: Arc<Context>,
     req_id: &Uuid,
     params: &DescribeRequestParams,
-) -> Result<Response<Body>, Errors> {
+) -> Result<Vec<DescribeResult>, Errors> {
     info!(
         "New describe request, id={}, urls={:?}",
         req_id, params.urls
@@ -198,11 +197,7 @@ pub async fn describe(
                     },
                 })
                 .collect();
-            Ok(DescribeResponse::to_response(
-                RpcStatus::Ok,
-                describe_results,
-                req_id,
-            ))
+            Ok(describe_results)
         }
         Err(e) => {
             error!("Error querying database for id={}, reason={}", req_id, e);
@@ -215,26 +210,21 @@ pub async fn report(
     ctx: Arc<Context>,
     req_id: &Uuid,
     params: &ReportRequestParams,
-) -> Result<Response<Body>, Errors> {
+) -> Result<(), Errors> {
     info!("New report request, id={}, url={}", req_id, params.url);
-    match ctx
-        .database
+    ctx.database
         .add_report(req_id, &params.url, &params.categories)
         .await
-    {
-        Ok(_) => Ok(ReportResponse::to_response(
-            RpcStatus::Ok,
-            &params.url,
-            req_id,
-        )),
-        Err(e) => {
+        .map_err(|e| {
             error!("Database not updated for id={}, reason={}", req_id, e);
-            Err(Errors::InternalError)
-        }
-    }
+            Errors::InternalError
+        })
 }
 
-pub async fn describe_report(ctx: Arc<Context>, req_id: &Uuid) -> Result<Response<Body>, Errors> {
+pub async fn describe_report(
+    ctx: Arc<Context>,
+    req_id: &Uuid,
+) -> Result<Vec<ReportDescribeResult>, Errors> {
     info!("New report describe request, id={}", req_id);
     match ctx.database.get_reports().await {
         Ok(rows) => {
@@ -247,11 +237,7 @@ pub async fn describe_report(ctx: Arc<Context>, req_id: &Uuid) -> Result<Respons
                     updated_at: r.updated_at.to_string(),
                 })
                 .collect();
-            Ok(ReportDescribeResponse::to_response(
-                RpcStatus::Ok,
-                results,
-                req_id,
-            ))
+            Ok(results)
         }
         Err(e) => {
             error!("Database not updated for id={}, reason={}", req_id, e);

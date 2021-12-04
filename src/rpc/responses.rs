@@ -50,6 +50,8 @@ pub struct ModerationResult {
     pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
     pub data: String,
+    #[serde(skip_serializing)]
+    pub document: Option<Arc<Document>>,
 }
 
 #[derive(Serialize)]
@@ -159,6 +161,7 @@ impl FetchResponse {
                         moderation_status,
                         categories,
                         data: document.map(|doc| doc.to_url()).unwrap_or_default(),
+                        document: None,
                     },
                 };
                 metrics::TRAFFIC

@@ -13,6 +13,9 @@ use crate::http::{HttpClientFactory, HttpClientWrapper};
 use crate::metrics;
 use crate::metrics::REGISTRY;
 use crate::moderation::{ModerationProvider, ModerationService};
+use crate::rpc::responses::{
+    DescribeResponse, FetchResponse, ReportDescribeResponse, ReportResponse, RpcStatus,
+};
 use crate::rpc::*;
 use crate::{built_info, rpc::error::Errors};
 use crate::{
@@ -122,6 +125,7 @@ pub async fn route(
     let response_time_start = Utc::now().timestamp_millis();
     let cors_config = config.cors.clone();
     let req_id = Uuid::new_v4();
+
     let result = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&config.security, req.borrow(), &req_id) {
@@ -183,16 +187,21 @@ async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
         cache.gather_metrics(&metrics::CACHE_METRICS);
     }
 
-    let encode_result = encoder.encode(&REGISTRY.gather(), &mut buffer);
-    if encode_result.is_err() {
-        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
+    match encoder.encode(&REGISTRY.gather(), &mut buffer) {
+        Ok(_) => match String::from_utf8(buffer) {
+            Ok(output) => Response::builder()
+                .body(Body::from(output))
+                .or_else(|_| empty_response(StatusCode::INTERNAL_SERVER_ERROR)),
+            Err(e) => {
+                error!("Unable to covert metrics to string, reason={}", e);
+                empty_response(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        },
+        Err(e) => {
+            error!("Unable to encode metrics, reason={}", e);
+            empty_response(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
-
-    let output = String::from_utf8(buffer.clone());
-    buffer.clear();
-    Response::builder()
-        .body(Body::from(output.unwrap_or_default()))
-        .or_else(|_| empty_response(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
@@ -217,17 +226,41 @@ async fn rpc(
                 match method {
                     RpcMethods::img_proxy_fetch => {
                         let params = decode::<FetchRequest>(&body)?;
-                        fetch(ctx, &req_id, &params.params).await
+                        let result = fetch(ctx, &req_id, &params.params).await?;
+                        Ok(FetchResponse::to_response(
+                            &params.params.response_type,
+                            result.document,
+                            result.moderation_status,
+                            result.categories,
+                            &req_id,
+                        ))
                     }
                     RpcMethods::img_proxy_describe => {
                         let params = decode::<DescribeRequest>(&body)?;
-                        describe(ctx, &req_id, &params.params).await
+                        let result = describe(ctx, &req_id, &params.params).await?;
+                        Ok(DescribeResponse::to_response(
+                            RpcStatus::Ok,
+                            result,
+                            &req_id,
+                        ))
                     }
                     RpcMethods::img_proxy_report => {
                         let params = decode::<ReportRequest>(&body)?;
-                        report(ctx, &req_id, &params.params).await
+                        let _ = report(ctx, &req_id, &params.params).await?;
+                        Ok(ReportResponse::to_response(
+                            RpcStatus::Ok,
+                            &params.params.url,
+                            &req_id,
+                        ))
                     }
-                    RpcMethods::img_proxy_describe_report => describe_report(ctx, &req_id).await,
+                    RpcMethods::img_proxy_describe_report => {
+                        let results = describe_report(ctx, &req_id).await?;
+                        Ok(ReportDescribeResponse::to_response(
+                            RpcStatus::Ok,
+                            results,
+                            &req_id,
+                        ))
+                    }
                 }
             }
             Ok(_) => Err(Errors::InvalidRpcVersionError),
