@@ -29,7 +29,7 @@ pub enum Errors {
 }
 
 impl Errors {
-    fn to_rpc_error(&self, request_id: &Uuid) -> RpcError {
+    pub fn to_rpc_error(&self, request_id: &Uuid) -> RpcError {
         let (code, reason) = match *self {
             Errors::InvalidRpcVersionError => (100, "Invalid RPC version".to_string()),
             Errors::InvalidRpcMethodError => (101, "Invalid RPC method".to_string()),

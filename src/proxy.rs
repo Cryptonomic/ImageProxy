@@ -131,6 +131,10 @@ pub async fn route(
             if authenticate(&config.security, req.borrow(), &req_id) {
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
+                    let rpc_error = e.to_rpc_error(&req_id);
+                    metrics::ERRORS_RPC
+                        .with_label_values(&[rpc_error.code.to_string().as_str()])
+                        .inc();
                     Ok(e.to_response(&req_id))
                 })
             } else {

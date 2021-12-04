@@ -25,6 +25,11 @@ lazy_static! {
     ];
     pub static ref REGISTRY: Registry = Registry::new();
     pub static ref ERRORS: IntCounter = IntCounter::new("errors", "Total errors").unwrap();
+    pub static ref ERRORS_RPC: IntCounterVec = IntCounterVec::new(
+        Opts::new("errors_rpc", "Count of rpc errors by type"),
+        &["errors_rpc"]
+    )
+    .unwrap();
     pub static ref HITS: IntCounter = IntCounter::new("hits", "Total hits").unwrap();
     pub static ref CACHE_METRICS: IntGaugeVec = IntGaugeVec::new(
         Opts::new("cache_metrics", "Cache metics by cache type"),
@@ -103,6 +108,7 @@ pub fn init_registry() {
     REGISTRY.register(Box::new(DOCUMENT.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT_TYPE.clone())).unwrap();
     REGISTRY.register(Box::new(ERRORS.clone())).unwrap();
+    REGISTRY.register(Box::new(ERRORS_RPC.clone())).unwrap();
     REGISTRY.register(Box::new(CACHE_METRICS.clone())).unwrap();
     REGISTRY.register(Box::new(TRAFFIC.clone())).unwrap();
     REGISTRY
