@@ -68,18 +68,16 @@ impl HttpClientProvider for HyperHttpClient {
                 })?;
                 let content_length = headers
                     .get(hyper::header::CONTENT_LENGTH)
-                    .map(|h| {
+                    .and_then(|h| {
                         String::from_utf8(h.as_bytes().to_vec())
                             .map(|s| s.parse::<u64>().ok())
                             .ok()
                     })
                     .flatten()
-                    .flatten()
                     .unwrap_or(bytes.len() as u64);
                 let content_type = headers
                     .get(hyper::header::CONTENT_TYPE)
-                    .map(|h| String::from_utf8(h.as_bytes().to_vec()).ok())
-                    .flatten()
+                    .and_then(|h| String::from_utf8(h.as_bytes().to_vec()).ok())
                     .unwrap_or_default();
                 Ok(Document {
                     id: *req_id,

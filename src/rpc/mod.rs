@@ -28,14 +28,10 @@ async fn fetch_document(
     url: &str,
 ) -> Result<Arc<Document>, Errors> {
     let cache_key = sha256(url.as_bytes());
-    let cached_doc = ctx
-        .cache
-        .as_ref()
-        .map(|cache| {
-            debug!("Fetched document from cache, url:{}", url);
-            cache.get(&cache_key)
-        })
-        .flatten();
+    let cached_doc = ctx.cache.as_ref().and_then(|cache| {
+        debug!("Fetched document from cache, url:{}", url);
+        cache.get(&cache_key)
+    });
 
     if let Some(doc) = cached_doc {
         Ok(doc)
