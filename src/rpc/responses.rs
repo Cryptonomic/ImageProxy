@@ -10,7 +10,6 @@ use super::{
     requests::ResponseType,
 };
 use crate::{
-    config::Configuration,
     document::Document,
     metrics,
     moderation::{ModerationCategories, ModerationService},
@@ -51,6 +50,8 @@ pub struct ModerationResult {
     pub moderation_status: ModerationStatus,
     pub categories: Vec<ModerationCategories>,
     pub data: String,
+    #[serde(skip_serializing)]
+    pub document: Option<Arc<Document>>,
 }
 
 #[derive(Serialize)]
@@ -129,12 +130,10 @@ impl FetchResponse {
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
         req_id: &Uuid,
-        config: &Configuration,
     ) -> Response<Body> {
         match response_type {
-            ResponseType::Raw => document.map_or_else(
-                || Errors::InternalError.to_response(req_id, config),
-                |doc| {
+            ResponseType::Raw => {
+                if let Some(doc) = document {
                     metrics::TRAFFIC
                         .with_label_values(&["served"])
                         .inc_by(doc.bytes.len() as u64);
@@ -144,8 +143,16 @@ impl FetchResponse {
                         .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
                         .body(Body::from(doc.bytes.clone()))
                         .unwrap_or_default()
-                },
-            ),
+                } else {
+                    FetchResponse::to_response(
+                        &ResponseType::Json,
+                        None,
+                        moderation_status,
+                        categories,
+                        req_id,
+                    )
+                }
+            }
             ResponseType::Json => {
                 let result = FetchResponse {
                     jsonrpc: String::from(VERSION),
@@ -154,6 +161,7 @@ impl FetchResponse {
                         moderation_status,
                         categories,
                         data: document.map(|doc| doc.to_url()).unwrap_or_default(),
+                        document: None,
                     },
                 };
                 metrics::TRAFFIC
@@ -168,7 +176,7 @@ impl FetchResponse {
                         .unwrap_or_default(),
                     Err(e) => {
                         error!("Error serializing fetch response, reason={}", e);
-                        Errors::InternalError.to_response(req_id, config)
+                        Errors::InternalError.to_response(req_id)
                     }
                 }
             }
@@ -181,7 +189,6 @@ impl DescribeResponse {
         rpc_status: RpcStatus,
         describe_results: Vec<DescribeResult>,
         req_id: &Uuid,
-        config: &Configuration,
     ) -> Response<Body> {
         let result = DescribeResponse {
             jsonrpc: String::from(VERSION),
@@ -193,27 +200,18 @@ impl DescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(
-                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    config.cors.origin.to_owned(),
-                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id, config)
+                Errors::InternalError.to_response(req_id)
             }
         }
     }
 }
 
 impl ReportResponse {
-    pub fn to_response(
-        rpc_status: RpcStatus,
-        url: &str,
-        req_id: &Uuid,
-        config: &Configuration,
-    ) -> Response<Body> {
+    pub fn to_response(rpc_status: RpcStatus, url: &str, req_id: &Uuid) -> Response<Body> {
         let result = ReportResponse {
             jsonrpc: String::from(VERSION),
             rpc_status,
@@ -227,15 +225,11 @@ impl ReportResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(
-                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    config.cors.origin.to_owned(),
-                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id, config)
+                Errors::InternalError.to_response(req_id)
             }
         }
     }
@@ -246,7 +240,6 @@ impl ReportDescribeResponse {
         rpc_status: RpcStatus,
         results: Vec<ReportDescribeResult>,
         req_id: &Uuid,
-        config: &Configuration,
     ) -> Response<Body> {
         let result = ReportDescribeResponse {
             jsonrpc: String::from(VERSION),
@@ -258,15 +251,11 @@ impl ReportDescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .header(
-                    hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    config.cors.origin.to_owned(),
-                )
                 .body(Body::from(body))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
-                Errors::InternalError.to_response(req_id, config)
+                Errors::InternalError.to_response(req_id)
             }
         }
     }

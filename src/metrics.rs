@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 #[cfg(not(target_os = "macos"))]
 use prometheus::process_collector::ProcessCollector;
 use prometheus::{
-    HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
+    HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGaugeVec, Opts, Registry,
 };
 
 lazy_static! {
@@ -24,9 +24,12 @@ lazy_static! {
         50000.0 * 1024_f64,
     ];
     pub static ref REGISTRY: Registry = Registry::new();
-    pub static ref ACTIVE_CLIENTS: IntGauge =
-        IntGauge::new("active_clients", "Active clients").unwrap();
     pub static ref ERRORS: IntCounter = IntCounter::new("errors", "Total errors").unwrap();
+    pub static ref ERRORS_RPC: IntCounterVec = IntCounterVec::new(
+        Opts::new("errors_rpc", "Count of rpc errors by type"),
+        &["errors_rpc"]
+    )
+    .unwrap();
     pub static ref HITS: IntCounter = IntCounter::new("hits", "Total hits").unwrap();
     pub static ref CACHE_METRICS: IntGaugeVec = IntGaugeVec::new(
         Opts::new("cache_metrics", "Cache metics by cache type"),
@@ -44,9 +47,24 @@ lazy_static! {
         &["method"]
     )
     .unwrap();
+    pub static ref API_KEY_USAGE: IntCounterVec = IntCounterVec::new(
+        Opts::new("api_key_usage", "Api key usage metrics by descriptive name"),
+        &["api_key_name"]
+    )
+    .unwrap();
+    pub static ref HTTP_CLIENT_CODES: IntCounterVec = IntCounterVec::new(
+        Opts::new("http_client_codes", "HTTP Client status codes"),
+        &["status_code"]
+    )
+    .unwrap();
     pub static ref DOCUMENT: IntCounterVec = IntCounterVec::new(
         Opts::new("document", "Document stats by status"),
         &["status"]
+    )
+    .unwrap();
+    pub static ref DOCUMENT_TYPE: IntCounterVec = IntCounterVec::new(
+        Opts::new("document_type", "Document types by mime"),
+        &["mime_types"]
     )
     .unwrap();
     pub static ref TRAFFIC: IntCounterVec =
@@ -63,26 +81,45 @@ lazy_static! {
         "Number of times the filter blocked a host"
     )
     .unwrap();
+    pub static ref URI_DESTINATION_HOST: IntCounterVec = IntCounterVec::new(
+        Opts::new("uri_source", "Counts requests by destination hostname"),
+        &["hostname"]
+    )
+    .unwrap();
+    pub static ref URI_DESTINATION_PROTOCOL: IntCounterVec = IntCounterVec::new(
+        Opts::new("uri_protocol", "Counts requests by protocol scheme"),
+        &["protocol"]
+    )
+    .unwrap();
 }
 
 pub fn init_registry() {
-    REGISTRY.register(Box::new(ACTIVE_CLIENTS.clone())).unwrap();
     REGISTRY.register(Box::new(HITS.clone())).unwrap();
     REGISTRY.register(Box::new(MODERATION.clone())).unwrap();
     REGISTRY.register(Box::new(API_REQUESTS.clone())).unwrap();
     REGISTRY
         .register(Box::new(API_RESPONSE_TIME.clone()))
         .unwrap();
+    REGISTRY.register(Box::new(API_KEY_USAGE.clone())).unwrap();
+    REGISTRY
+        .register(Box::new(HTTP_CLIENT_CODES.clone()))
+        .unwrap();
     REGISTRY.register(Box::new(DOCUMENT_SIZE.clone())).unwrap();
     REGISTRY.register(Box::new(DOCUMENT.clone())).unwrap();
+    REGISTRY.register(Box::new(DOCUMENT_TYPE.clone())).unwrap();
     REGISTRY.register(Box::new(ERRORS.clone())).unwrap();
+    REGISTRY.register(Box::new(ERRORS_RPC.clone())).unwrap();
     REGISTRY.register(Box::new(CACHE_METRICS.clone())).unwrap();
     REGISTRY.register(Box::new(TRAFFIC.clone())).unwrap();
     REGISTRY
         .register(Box::new(URI_FILTER_BLOCKED.clone()))
         .unwrap();
-
-    
+    REGISTRY
+        .register(Box::new(URI_DESTINATION_HOST.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(URI_DESTINATION_PROTOCOL.clone()))
+        .unwrap();
     #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();
     #[cfg(not(target_os = "macos"))]

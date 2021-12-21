@@ -37,6 +37,9 @@ jobs:
           target
         key: ${{ runner.os }}-test-cache-${{ hashFiles('Cargo.lock') }}
         restore-keys: ${{ runner.os }}-build-cache
+    - name: Clean up old files
+      run: |
+        (find . -name "*.gcda" -print0 | xargs -0 rm) || true
     - name: Run test
       run: |
         cargo test --workspace --all-features --no-fail-fast --verbose

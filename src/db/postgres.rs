@@ -1,42 +1,26 @@
-use std::time::Duration;
-
 use crate::{
     config::DatabaseConfig,
     moderation::{ModerationCategories, ModerationService},
     utils::sha256,
 };
+use async_trait::async_trait;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
 use log::debug;
+use std::time::Duration;
 use tokio_postgres::NoTls;
-
 use uuid::Uuid;
 
-type GenericError = Box<dyn std::error::Error + Send + Sync>;
-type Result<T> = std::result::Result<T, GenericError>;
+use super::{DatabaseProvider, DbModerationRow, DbReportRow, Result};
 
 #[derive(Clone)]
-pub struct Database {
+pub struct PostgresDatabase {
     pool: Pool<PostgresConnectionManager<NoTls>>,
 }
 
-pub struct DocumentCacheRow {
-    pub blocked: bool,
-    pub categories: Vec<ModerationCategories>,
-    pub provider: ModerationService,
-    pub url: String,
-}
-
-pub struct ReportRow {
-    pub id: String,
-    pub url: String,
-    pub categories: Vec<ModerationCategories>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl Database {
-    pub async fn new(config: &DatabaseConfig) -> Result<Database> {
+impl PostgresDatabase {
+    pub async fn new(config: &DatabaseConfig) -> Result<PostgresDatabase> {
         let connection_string = format!(
             "postgresql://{}:{}@{}:{}",
             config.username, config.password, config.host, config.port
@@ -47,7 +31,7 @@ impl Database {
         )
         .unwrap();
 
-        Ok(Database {
+        Ok(PostgresDatabase {
             pool: Pool::builder()
                 .connection_timeout(Duration::new(config.pool_connection_timeout, 0))
                 .min_idle(Some(config.pool_idle_connections))
@@ -57,8 +41,11 @@ impl Database {
                 .unwrap(),
         })
     }
+}
 
-    pub async fn add_report(
+#[async_trait]
+impl DatabaseProvider for PostgresDatabase {
+    async fn add_report(
         &self,
         id: &Uuid,
         url: &str,
@@ -81,7 +68,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_reports(&self) -> Result<Vec<ReportRow>> {
+    async fn get_reports(&self) -> Result<Vec<DbReportRow>> {
         let conn = self.pool.get().await?;
         let results = conn
             .query("SELECT id, url, categories, updated_at from report;", &[])
@@ -96,7 +83,7 @@ impl Database {
                 let categories = serde_json::from_str::<Vec<ModerationCategories>>(categories)
                     .unwrap_or_default();
                 let updated_at: DateTime<Utc> = r.get("updated_at");
-                ReportRow {
+                DbReportRow {
                     id: String::from(id),
                     url: String::from(url),
                     categories,
@@ -106,7 +93,7 @@ impl Database {
             .collect())
     }
 
-    pub async fn update_moderation_result(
+    async fn update_moderation_result(
         &self,
         url: &str,
         provider: ModerationService,
@@ -133,7 +120,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn add_moderation_result(
+    async fn add_moderation_result(
         &self,
         url: &str,
         provider: ModerationService,
@@ -155,7 +142,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_moderation_result(&self, url: &[String]) -> Result<Vec<DocumentCacheRow>> {
+    async fn get_moderation_result(&self, url: &[String]) -> Result<Vec<DbModerationRow>> {
         let url_hashes: Vec<String> = url.iter().map(|u| sha256(u.as_bytes())).collect();
         let conn = self.pool.get().await?;
         let results = conn
@@ -183,7 +170,7 @@ impl Database {
                     .unwrap_or_default();
                 let provider = serde_json::from_str::<ModerationService>(provider)
                     .unwrap_or(ModerationService::Unknown);
-                DocumentCacheRow {
+                DbModerationRow {
                     blocked,
                     categories,
                     provider,
