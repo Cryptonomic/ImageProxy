@@ -13,8 +13,13 @@ pub struct DummyDatabase {
     moderation_store: Mutex<HashMap<String, DbModerationRow>>,
 }
 
+impl Default for DummyDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DummyDatabase {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         DummyDatabase {
             report_store: Mutex::new(HashMap::new()),
@@ -98,67 +103,63 @@ impl DatabaseProvider for DummyDatabase {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[tokio::test]
-    async fn test_moderation_fns() {
-        let db = DummyDatabase::new();
-        let url = "http://localhost/test.png".to_string();
-        let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
-        assert_eq!(result.len(), 0);
+#[tokio::test]
+async fn test_dummy_database_moderation_fns() {
+    let db = DummyDatabase::new();
+    let url = "http://localhost/test.png".to_string();
+    let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
+    assert_eq!(result.len(), 0);
 
-        let _ = db
-            .add_moderation_result(
-                url.as_str(),
-                ModerationService::Unknown,
-                true,
-                &[ModerationCategories::Alcohol],
-            )
-            .await;
-        let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
-        assert_eq!(result.len(), 1);
-        let row = result.get(0).unwrap();
-        assert!(row.blocked);
-        assert_eq!(row.categories[0], ModerationCategories::Alcohol);
-        assert_eq!(row.url, url);
-        assert_eq!(row.provider, ModerationService::Unknown);
+    let _ = db
+        .add_moderation_result(
+            url.as_str(),
+            ModerationService::Unknown,
+            true,
+            &[ModerationCategories::Alcohol],
+        )
+        .await;
+    let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
+    assert_eq!(result.len(), 1);
+    let row = result.get(0).unwrap();
+    assert!(row.blocked);
+    assert_eq!(row.categories[0], ModerationCategories::Alcohol);
+    assert_eq!(row.url, url);
+    assert_eq!(row.provider, ModerationService::Unknown);
 
-        let _ = db
-            .update_moderation_result(
-                url.as_str(),
-                ModerationService::Unknown,
-                true,
-                &[ModerationCategories::Alcohol, ModerationCategories::Drugs],
-            )
-            .await;
+    let _ = db
+        .update_moderation_result(
+            url.as_str(),
+            ModerationService::Unknown,
+            true,
+            &[ModerationCategories::Alcohol, ModerationCategories::Drugs],
+        )
+        .await;
 
-        let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
-        assert_eq!(result.len(), 1);
-        let row = result.get(0).unwrap();
-        assert!(row.blocked);
-        assert_eq!(row.categories.len(), 2);
-        assert_eq!(row.categories[0], ModerationCategories::Alcohol);
-        assert_eq!(row.categories[1], ModerationCategories::Drugs);
-        assert_eq!(row.url, url);
-        assert_eq!(row.provider, ModerationService::Unknown);
-    }
+    let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
+    assert_eq!(result.len(), 1);
+    let row = result.get(0).unwrap();
+    assert!(row.blocked);
+    assert_eq!(row.categories.len(), 2);
+    assert_eq!(row.categories[0], ModerationCategories::Alcohol);
+    assert_eq!(row.categories[1], ModerationCategories::Drugs);
+    assert_eq!(row.url, url);
+    assert_eq!(row.provider, ModerationService::Unknown);
+}
 
-    #[tokio::test]
-    async fn test_report_fns() {
-        let db = DummyDatabase::new();
-        let url = "http://localhost/test.png".to_string();
-        let id = Uuid::new_v4();
-        let result = db.get_reports().await.unwrap();
-        assert_eq!(result.len(), 0);
+#[tokio::test]
+async fn test_dummy_database_report_fns() {
+    let db = DummyDatabase::new();
+    let url = "http://localhost/test.png".to_string();
+    let id = Uuid::new_v4();
+    let result = db.get_reports().await.unwrap();
+    assert_eq!(result.len(), 0);
 
-        let _ = db
-            .add_report(&id, url.as_str(), &[ModerationCategories::Alcohol])
-            .await;
-        let result = db.get_reports().await.unwrap();
-        assert_eq!(result.len(), 1);
-        let row = result.get(0).unwrap();
-        assert_eq!(row.url, url);
-        assert_eq!(row.categories[0], ModerationCategories::Alcohol);
-    }
+    let _ = db
+        .add_report(&id, url.as_str(), &[ModerationCategories::Alcohol])
+        .await;
+    let result = db.get_reports().await.unwrap();
+    assert_eq!(result.len(), 1);
+    let row = result.get(0).unwrap();
+    assert_eq!(row.url, url);
+    assert_eq!(row.categories[0], ModerationCategories::Alcohol);
 }
