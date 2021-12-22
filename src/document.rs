@@ -77,10 +77,6 @@ impl Document {
     }
 
     pub fn to_url(&self) -> String {
-        format!(
-            "data:{};base64,{}",
-            self.content_type,
-            encode(self.bytes.to_vec())
-        )
+        format!("data:{};base64,{}", self.content_type, encode(&self.bytes))
     }
 }

@@ -93,7 +93,7 @@ impl HttpClientWrapper {
 
     pub async fn fetch(&self, req_id: &Uuid, url: &str) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
-        let uri = self.to_uri(&url.to_string())?;
+        let uri = self.to_uri(url)?;
 
         let filter_results = self
             .uri_filters
