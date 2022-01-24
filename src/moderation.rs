@@ -102,13 +102,13 @@ pub mod tests {
     }
 
     impl DummyModerationProvider {
-        fn new() -> Self {
+        pub fn new() -> Self {
             DummyModerationProvider {
                 store: Mutex::new(HashMap::new()),
             }
         }
 
-        fn set(&mut self, url: &str, categories: Vec<ModerationCategories>) {
+        pub fn set(&mut self, url: &str, categories: Vec<ModerationCategories>) {
             let mut store = self.store.lock().unwrap();
             store.insert(url.to_string(), categories);
         }

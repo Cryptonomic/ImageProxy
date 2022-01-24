@@ -243,4 +243,51 @@ pub async fn describe_report(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use hyper::body::Bytes;
+    use uuid::Uuid;
+
+    use crate::config::Host;
+    use crate::db::tests::DummyDatabase;
+    use crate::document::Document;
+    use crate::http::tests::DummyHttpClient;
+    use crate::http::HttpClientWrapper;
+    use crate::moderation::tests::DummyModerationProvider;
+
+    use crate::proxy::Context;
+    use std::sync::Arc;
+
+    fn get_context() -> Arc<Context> {
+        let database = DummyDatabase::new();
+        let moderation_provider = DummyModerationProvider::new();
+        let ipfs_config = Host {
+            protocol: "http".to_string(),
+            host: "localhost".to_string(),
+            port: 1337,
+            path: "/ipfs".to_string(),
+        };
+        let http_client_provider =
+            HttpClientWrapper::new(Box::new(DummyHttpClient::new()), ipfs_config, Vec::new());
+        let context = Context {
+            database: Box::new(database),
+            moderation_provider: Box::new(moderation_provider),
+            http_client_provider,
+            cache: None,
+        };
+
+        Arc::new(context)
+    }
+
+    #[tokio::test]
+    async fn test_rpc_fetch() {
+        let url = "http://localhost/test.png".to_string();
+        let test_document = Document {
+            id: Uuid::new_v4(),
+            content_type: "image/png".to_string(),
+            content_length: 100_u64,
+            bytes: Bytes::new(),
+            url: url.clone(),
+        };
+        let mut context = get_context();
+    }
+}

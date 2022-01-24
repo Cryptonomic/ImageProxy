@@ -34,6 +34,18 @@ pub struct HttpClientWrapper {
 }
 
 impl HttpClientWrapper {
+    pub fn new(
+        client: Box<dyn HttpClientProvider + Send + Sync>,
+        ipfs_config: Host,
+        uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
+    ) -> Self {
+        HttpClientWrapper {
+            client,
+            ipfs_config,
+            uri_filters,
+        }
+    }
+
     fn to_uri(&self, url: &str) -> Result<Uri, Errors> {
         let uri = url.parse::<Uri>().map_err(|e| {
             error!("Error parsing url={}, reason={}", url, e);
@@ -161,19 +173,56 @@ impl HttpClientFactory {
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
-        HttpClientWrapper {
-            client: Box::new(HyperHttpClient::new(max_document_size, timeout)),
+        HttpClientWrapper::new(
+            Box::new(HyperHttpClient::new(max_document_size, timeout)),
             ipfs_config,
             uri_filters,
-        }
+        )
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    use std::{collections::HashMap, sync::Mutex};
+
     use super::*;
     use crate::dns::StandardDnsResolver;
     use filters::private_network::PrivateNetworkFilter;
+
+    pub struct DummyHttpClient {
+        store: Mutex<HashMap<String, Document>>,
+    }
+
+    impl Default for DummyHttpClient {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl DummyHttpClient {
+        pub fn new() -> Self {
+            DummyHttpClient {
+                store: Mutex::new(HashMap::new()),
+            }
+        }
+
+        pub fn set(&mut self, url: &str, document: Document) {
+            let mut store = self.store.lock().unwrap();
+            store.insert(url.to_string(), document);
+        }
+    }
+
+    #[async_trait]
+    impl HttpClientProvider for DummyHttpClient {
+        async fn fetch(&self, _: &Uuid, url: &Uri) -> Result<Document, StatusCode> {
+            let store = self.store.lock().unwrap();
+            let url = url.to_string();
+            match store.get(&url) {
+                Some(document) => Ok(document.clone()),
+                None => Err(400),
+            }
+        }
+    }
 
     #[test]
     fn test_to_uri_fn() {

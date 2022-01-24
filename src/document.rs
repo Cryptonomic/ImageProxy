@@ -16,6 +16,7 @@ use image::{self, GenericImageView};
 use log::{debug, error};
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct Document {
     pub id: Uuid,
     pub content_type: String,
