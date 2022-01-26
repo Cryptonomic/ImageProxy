@@ -39,6 +39,7 @@ use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
+#[deny(clippy::all)]
 #[deprecated(
     since = "1.4.0",
     note = "UI Dashboard will be removed starting version 2.0"
