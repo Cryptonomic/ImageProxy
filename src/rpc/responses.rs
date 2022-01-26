@@ -23,7 +23,7 @@ pub enum RpcStatus {
     Err,
 }
 
-#[derive(Serialize, PartialEq)]
+#[derive(Serialize, PartialEq, Debug)]
 pub enum ModerationStatus {
     Allowed,
     Blocked,

@@ -39,6 +39,10 @@ impl HttpClientWrapper {
         ipfs_config: Host,
         uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
     ) -> Self {
+        assert!(
+            !uri_filters.is_empty(),
+            "No URI filters configured. This cannot be correct, check code."
+        );
         HttpClientWrapper {
             client,
             ipfs_config,
@@ -219,7 +223,7 @@ pub mod tests {
             let url = url.to_string();
             match store.get(&url) {
                 Some(document) => Ok(document.clone()),
-                None => Err(400),
+                None => Err(404),
             }
         }
     }

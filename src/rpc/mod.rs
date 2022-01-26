@@ -249,25 +249,57 @@ mod tests {
 
     use crate::config::Host;
     use crate::db::tests::DummyDatabase;
+    use crate::dns::DummyDnsResolver;
     use crate::document::Document;
+    use crate::http::filters::private_network::PrivateNetworkFilter;
+    use crate::http::filters::UriFilter;
     use crate::http::tests::DummyHttpClient;
     use crate::http::HttpClientWrapper;
     use crate::moderation::tests::DummyModerationProvider;
+    use crate::moderation::ModerationCategories;
 
     use crate::proxy::Context;
+    use std::net::IpAddr;
     use std::sync::Arc;
 
-    fn get_context() -> Arc<Context> {
+    use super::*;
+
+    const URL_SAFE_IMAGE: &str = "http://cryptonomic.tech/test.png";
+    const URL_UNSAFE_IMAGE: &str = "http://cryptonomic.tech/drugs.png";
+    const URL_404: &str = "http://cryptonomic.tech/404.png";
+
+    fn construct_context(
+        document: Option<Document>,
+        categories: Option<Vec<ModerationCategories>>,
+    ) -> Arc<Context> {
         let database = DummyDatabase::new();
-        let moderation_provider = DummyModerationProvider::new();
+        let mut moderation_provider = DummyModerationProvider::new();
+        let mut http_client = DummyHttpClient::new();
         let ipfs_config = Host {
             protocol: "http".to_string(),
             host: "localhost".to_string(),
             port: 1337,
             path: "/ipfs".to_string(),
         };
+        let ip: IpAddr = "8.8.8.8".parse().unwrap();
+        let ip_vec = vec![ip];
+        let dns_resolver = DummyDnsResolver {
+            resolved_address: ip_vec,
+        };
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
+            vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
+
+        if let Some(doc) = document {
+            let url = doc.url.clone();
+            http_client.set(&url.clone(), doc);
+            if let Some(cats) = categories {
+                moderation_provider.set(&url, cats)
+            };
+        }
+
         let http_client_provider =
-            HttpClientWrapper::new(Box::new(DummyHttpClient::new()), ipfs_config, Vec::new());
+            HttpClientWrapper::new(Box::new(http_client), ipfs_config, uri_filters);
+
         let context = Context {
             database: Box::new(database),
             moderation_provider: Box::new(moderation_provider),
@@ -278,16 +310,86 @@ mod tests {
         Arc::new(context)
     }
 
-    #[tokio::test]
-    async fn test_rpc_fetch() {
-        let url = "http://localhost/test.png".to_string();
-        let test_document = Document {
+    fn construct_document(url: &str) -> Document {
+        let buffer = "Hello There";
+        Document {
             id: Uuid::new_v4(),
             content_type: "image/png".to_string(),
-            content_length: 100_u64,
-            bytes: Bytes::new(),
-            url: url.clone(),
+            content_length: buffer.len() as u64,
+            bytes: Bytes::from(buffer),
+            url: url.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_document_ok() {
+        let doc = construct_document(URL_SAFE_IMAGE);
+        let context = construct_context(Some(doc), None);
+
+        // Fetch an image that exists
+        let document = fetch_document(context.clone(), &Uuid::new_v4(), URL_SAFE_IMAGE).await;
+        assert!(document.is_ok());
+
+        // Fetch an image that doesn't exist
+        let document = fetch_document(context, &Uuid::new_v4(), URL_404).await;
+        assert!(document.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_safe_image() {
+        let doc = construct_document(URL_SAFE_IMAGE);
+        let context = construct_context(Some(doc), None);
+
+        let params = FetchRequestParams {
+            url: URL_SAFE_IMAGE.to_string(),
+            force: false,
+            response_type: ResponseType::Json,
         };
-        let mut context = get_context();
+        let result = fetch(context, &Uuid::new_v4(), &params).await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.moderation_status, ModerationStatus::Allowed);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_unsafe_image() {
+        let categories = vec![ModerationCategories::Drugs];
+        let doc = construct_document(URL_UNSAFE_IMAGE);
+        let context = construct_context(Some(doc), Some(categories));
+
+        let params = FetchRequestParams {
+            url: URL_UNSAFE_IMAGE.to_string(),
+            force: false,
+            response_type: ResponseType::Json,
+        };
+        let result = fetch(context, &Uuid::new_v4(), &params).await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.moderation_status, ModerationStatus::Blocked);
+        assert_eq!(result.categories.len(), 1);
+        assert!(result.categories.contains(&ModerationCategories::Drugs));
+        // no data should be returned
+        assert!(result.document.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_unsafe_image_force() {
+        let categories = vec![ModerationCategories::Drugs];
+        let doc = construct_document(URL_UNSAFE_IMAGE);
+        let context = construct_context(Some(doc), Some(categories));
+
+        let params = FetchRequestParams {
+            url: URL_UNSAFE_IMAGE.to_string(),
+            force: true,
+            response_type: ResponseType::Json,
+        };
+        let result = fetch(context, &Uuid::new_v4(), &params).await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.moderation_status, ModerationStatus::Blocked);
+        assert_eq!(result.categories.len(), 1);
+        assert!(result.categories.contains(&ModerationCategories::Drugs));
+        // data should be returned due to force = true flag
+        assert!(result.document.is_some());
     }
 }

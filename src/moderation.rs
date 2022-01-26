@@ -128,11 +128,11 @@ pub mod tests {
         }
 
         fn supported_types(&self) -> Vec<SupportedMimeTypes> {
-            vec![SupportedMimeTypes::ImageJpeg]
+            vec![SupportedMimeTypes::ImageJpeg, SupportedMimeTypes::ImagePng]
         }
 
         fn max_document_size(&self) -> u64 {
-            12
+            65536_u64
         }
     }
 
@@ -148,8 +148,8 @@ pub mod tests {
             url: "http://localhost".to_string(),
         };
 
-        assert_eq!(provider.max_document_size(), 12);
-        assert_eq!(provider.supported_types().len(), 1);
+        assert_eq!(provider.max_document_size(), 65536);
+        assert_eq!(provider.supported_types().len(), 2);
         assert!(provider
             .supported_types()
             .contains(&SupportedMimeTypes::ImageJpeg));
