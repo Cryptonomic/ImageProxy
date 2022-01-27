@@ -70,7 +70,6 @@ pub struct Configuration {
     pub port: u16,
     pub timeout: u64,
     pub metrics_enabled: bool,
-    pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
     pub client_useragent: Option<String>,
     pub security: SecurityConfig,
