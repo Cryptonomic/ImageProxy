@@ -34,6 +34,22 @@ pub struct HttpClientWrapper {
 }
 
 impl HttpClientWrapper {
+    pub fn new(
+        client: Box<dyn HttpClientProvider + Send + Sync>,
+        ipfs_config: Host,
+        uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
+    ) -> Self {
+        assert!(
+            !uri_filters.is_empty(),
+            "No URI filters configured. This cannot be correct, check code."
+        );
+        HttpClientWrapper {
+            client,
+            ipfs_config,
+            uri_filters,
+        }
+    }
+
     fn to_uri(&self, url: &str) -> Result<Uri, Errors> {
         let uri = url.parse::<Uri>().map_err(|e| {
             error!("Error parsing url={}, reason={}", url, e);
@@ -93,7 +109,7 @@ impl HttpClientWrapper {
 
     pub async fn fetch(&self, req_id: &Uuid, url: &str) -> Result<Document, Errors> {
         info!("Fetching document for id:{}, url:{}", req_id, url);
-        let uri = self.to_uri(&url.to_string())?;
+        let uri = self.to_uri(url)?;
 
         let filter_results = self
             .uri_filters
@@ -162,6 +178,7 @@ impl HttpClientFactory {
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
+      
         HttpClientWrapper {
             client: Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
             ipfs_config,
@@ -171,10 +188,47 @@ impl HttpClientFactory {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    use std::{collections::HashMap, sync::Mutex};
+
     use super::*;
     use crate::dns::StandardDnsResolver;
     use filters::private_network::PrivateNetworkFilter;
+
+    pub struct DummyHttpClient {
+        store: Mutex<HashMap<String, Document>>,
+    }
+
+    impl Default for DummyHttpClient {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl DummyHttpClient {
+        pub fn new() -> Self {
+            DummyHttpClient {
+                store: Mutex::new(HashMap::new()),
+            }
+        }
+
+        pub fn set(&mut self, url: &str, document: Document) {
+            let mut store = self.store.lock().unwrap();
+            store.insert(url.to_string(), document);
+        }
+    }
+
+    #[async_trait]
+    impl HttpClientProvider for DummyHttpClient {
+        async fn fetch(&self, _: &Uuid, url: &Uri) -> Result<Document, StatusCode> {
+            let store = self.store.lock().unwrap();
+            let url = url.to_string();
+            match store.get(&url) {
+                Some(document) => Ok(document.clone()),
+                None => Err(404),
+            }
+        }
+    }
 
     #[test]
     fn test_to_uri_fn() {

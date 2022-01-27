@@ -16,6 +16,7 @@ use image::{self, GenericImageView};
 use log::{debug, error};
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct Document {
     pub id: Uuid,
     pub content_type: String,
@@ -77,10 +78,6 @@ impl Document {
     }
 
     pub fn to_url(&self) -> String {
-        format!(
-            "data:{};base64,{}",
-            self.content_type,
-            encode(self.bytes.to_vec())
-        )
+        format!("data:{};base64,{}", self.content_type, encode(&self.bytes))
     }
 }
