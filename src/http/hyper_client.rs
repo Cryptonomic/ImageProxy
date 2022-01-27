@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use hyper::client::HttpConnector;
-use hyper::Client;
 use hyper::{body::to_bytes, Uri};
+use hyper::{Client, Method, Request};
 use hyper_timeout::TimeoutConnector;
 use hyper_tls::HttpsConnector;
 use log::error;
@@ -20,10 +20,11 @@ use crate::document::Document;
 pub struct HyperHttpClient {
     client: Client<TimeoutConnector<HttpsConnector<HttpConnector<GaiResolver>>>, Body>,
     _max_document_size: Option<u64>,
+    useragent: Option<String>,
 }
 
 impl HyperHttpClient {
-    pub fn new(max_document_size: Option<u64>, timeout: u64) -> Self {
+    pub fn new(max_document_size: Option<u64>, timeout: u64, useragent: Option<String>) -> Self {
         let https = HttpsConnector::new();
         let mut connector = TimeoutConnector::new(https);
 
@@ -35,6 +36,7 @@ impl HyperHttpClient {
         HyperHttpClient {
             client,
             _max_document_size: max_document_size,
+            useragent,
         }
     }
 }
@@ -42,7 +44,14 @@ impl HyperHttpClient {
 #[async_trait]
 impl HttpClientProvider for HyperHttpClient {
     async fn fetch(&self, req_id: &Uuid, uri: &Uri) -> Result<Document, StatusCode> {
-        let response = self.client.get(uri.clone()).await.map_err(|error| {
+        let request = Request::builder().method(Method::GET).uri(uri.clone());
+        let request = if let Some(useragent) = &self.useragent {
+            request.header("user-agent", useragent)
+        } else {
+            request
+        };
+        let request = request.body(Body::empty()).unwrap();
+        let response = self.client.request(request).await.map_err(|error| {
             error!(
                 "Unable to fetch document, id={}, reason={}, url={}",
                 req_id, error, uri

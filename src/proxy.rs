@@ -63,6 +63,7 @@ impl Context {
             config.max_document_size,
             uri_filters,
             config.timeout,
+            config.client_useragent.clone(),
         );
         Ok(Context {
             database,
