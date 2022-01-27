@@ -1,9 +1,11 @@
 [package]
 name = "nft_image_proxy"
-version = "1.4.0"
+version = "2.0.0"
+repository = "https://github.com/Cryptonomic/ImageProxy"
 authors = ["Cryptonomic Inc."]
 edition = "2018"
 build = "build.rs"
+exclude = ["/docker", "/docs", "/lib", "/log", "proxy.conf", "/*.yml", "/.github", "Dockerfile", "LICENSE", "README.md", ".gitignore", ".dockerignore"]
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2"] }
