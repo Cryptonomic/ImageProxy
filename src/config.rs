@@ -66,6 +66,7 @@ pub struct Configuration {
     pub metrics_enabled: bool,
     pub dashboard_enabled: bool,
     pub max_document_size: Option<u64>,
+    pub client_useragent: Option<String>,
     pub security: SecurityConfig,
     pub database: DatabaseConfig,
     pub moderation: ModerationConfig,
