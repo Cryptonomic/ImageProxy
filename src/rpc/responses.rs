@@ -68,7 +68,7 @@ pub struct FetchResponse {
     pub result: ModerationResult,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Debug)]
 pub enum DocumentStatus {
     Blocked,
     Allowed,

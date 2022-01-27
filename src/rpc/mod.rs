@@ -392,4 +392,56 @@ mod tests {
         // data should be returned due to force = true flag
         assert!(result.document.is_some());
     }
+
+    #[tokio::test]
+    async fn test_describe() {
+        let context = construct_context(None, None);
+        let database = &context.database;
+        // Insert results into the database
+        let result = database
+            .add_moderation_result(URL_SAFE_IMAGE, ModerationService::Aws, false, &[])
+            .await;
+        assert!(result.is_ok());
+
+        let result = database
+            .add_moderation_result(
+                URL_UNSAFE_IMAGE,
+                ModerationService::Aws,
+                true,
+                &[ModerationCategories::Drugs],
+            )
+            .await;
+        assert!(result.is_ok());
+
+        let params = DescribeRequestParams {
+            urls: vec![
+                URL_SAFE_IMAGE.to_string(),
+                URL_UNSAFE_IMAGE.to_string(),
+                URL_404.to_string(),
+            ],
+        };
+        let result = describe(context, &Uuid::new_v4(), &params).await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
+        let result1 = &result[0];
+        let result2 = &result[1];
+        let result3 = &result[2];
+
+        assert_eq!(result1.url, URL_SAFE_IMAGE);
+        assert_eq!(result1.status, DocumentStatus::Allowed);
+        assert_eq!(result1.provider, ModerationService::Aws);
+        assert!(result1.categories.is_empty());
+
+        assert_eq!(result2.url, URL_UNSAFE_IMAGE);
+        assert_eq!(result2.status, DocumentStatus::Blocked);
+        assert_eq!(result2.provider, ModerationService::Aws);
+        assert_eq!(result2.categories.len(), 1);
+        assert!(result2.categories.contains(&ModerationCategories::Drugs));
+
+        assert_eq!(result3.url, URL_404);
+        assert_eq!(result3.status, DocumentStatus::NeverSeen);
+        assert_eq!(result3.provider, ModerationService::None);
+        assert!(result3.categories.is_empty());
+    }
 }

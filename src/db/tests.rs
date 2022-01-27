@@ -87,18 +87,22 @@ impl DatabaseProvider for DummyDatabase {
 
         let mut moderation_store = self.moderation_store.lock().unwrap();
         moderation_store.insert(url_hash, row);
+        let _store_len = moderation_store.len();
         Ok(())
     }
 
-    async fn get_moderation_result(&self, url: &[String]) -> Result<Vec<DbModerationRow>> {
+    async fn get_moderation_result(&self, urls: &[String]) -> Result<Vec<DbModerationRow>> {
         let moderation_store = self.moderation_store.lock().unwrap();
-        let url_hash = sha256(url[0].as_bytes());
-        let row = moderation_store.get(&url_hash);
-        let result: Vec<DbModerationRow> = if row.is_some() {
-            vec![row.unwrap().clone()]
-        } else {
-            vec![]
-        };
+        let urls = Vec::from(urls);
+        let result: Vec<DbModerationRow> = urls
+            .iter()
+            .map(|url| {
+                let url_hash = sha256(url.as_bytes());
+                moderation_store.get(&url_hash)
+            })
+            .filter(|row| row.is_some())
+            .map(|row| row.unwrap().clone())
+            .collect();
         Ok(result)
     }
 }
