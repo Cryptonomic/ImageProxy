@@ -183,7 +183,7 @@ impl HttpClientFactory {
             client: Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
             ipfs_config,
             uri_filters,
-        )
+        }
     }
 }
 
