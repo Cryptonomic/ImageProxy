@@ -32,21 +32,11 @@ use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::{debug, error};
 use prometheus::Encoder;
-use rust_embed::RustEmbed;
 use serde::de;
 use serde_json;
 use std::{borrow::Borrow, sync::Arc};
 use uuid::Uuid;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
-
-#[deprecated(
-    since = "1.4.0",
-    note = "UI Dashboard will be removed starting version 2.0"
-)]
-#[derive(RustEmbed)]
-#[folder = "dashboard-ui/build"]
-struct Asset;
-
 pub struct Context {
     pub database: Box<dyn DatabaseProvider + Send + Sync>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
@@ -149,16 +139,6 @@ pub async fn route(
         (&Method::GET, "/") => empty_response(StatusCode::OK),
         (&Method::GET, "/info") => info().await,
         (&Method::GET, "/metrics") if config.metrics_enabled => metrics(ctx).await,
-        (&Method::GET, path) if config.dashboard_enabled => {
-            let file = Asset::get(&path[1..]);
-            match file {
-                Some(f) => Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Body::from(f.data.into_owned()))
-                    .unwrap()),
-                None => empty_response(StatusCode::NOT_FOUND),
-            }
-        }
         _ => empty_response(StatusCode::OK),
     };
 
