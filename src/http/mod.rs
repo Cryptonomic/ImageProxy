@@ -195,7 +195,7 @@ impl HttpClientWrapper {
     }
 }
 
-pub struct HttpClientFactory {}
+pub struct HttpClientFactory;
 
 impl HttpClientFactory {
     pub fn get_provider(
@@ -203,13 +203,15 @@ impl HttpClientFactory {
         max_document_size: Option<u64>,
         uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
         timeout: u64,
+        useragent: Option<String>,
     ) -> HttpClientWrapper {
         assert!(
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
+
         HttpClientWrapper {
-            client: Box::new(HyperHttpClient::new(max_document_size, timeout)),
+            client: Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
             ipfs_config,
             uri_filters,
         }
@@ -217,10 +219,47 @@ impl HttpClientFactory {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    use std::{collections::HashMap, sync::Mutex};
+
     use super::*;
     use crate::dns::StandardDnsResolver;
     use filters::private_network::PrivateNetworkFilter;
+
+    pub struct DummyHttpClient {
+        store: Mutex<HashMap<String, Document>>,
+    }
+
+    impl Default for DummyHttpClient {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl DummyHttpClient {
+        pub fn new() -> Self {
+            DummyHttpClient {
+                store: Mutex::new(HashMap::new()),
+            }
+        }
+
+        pub fn set(&mut self, url: &str, document: Document) {
+            let mut store = self.store.lock().unwrap();
+            store.insert(url.to_string(), document);
+        }
+    }
+
+    #[async_trait]
+    impl HttpClientProvider for DummyHttpClient {
+        async fn fetch(&self, _: &Uuid, url: &Uri) -> Result<Document, StatusCode> {
+            let store = self.store.lock().unwrap();
+            let url = url.to_string();
+            match store.get(&url) {
+                Some(document) => Ok(document.clone()),
+                None => Err(404),
+            }
+        }
+    }
 
     #[test]
     fn test_parse_uri() {

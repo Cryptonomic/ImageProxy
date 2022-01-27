@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-mod dummy_db;
 mod postgres;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -69,3 +68,6 @@ impl DatabaseFactory {
         Ok(Box::new(db))
     }
 }
+
+#[cfg(test)]
+pub mod tests;

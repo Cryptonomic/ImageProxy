@@ -23,7 +23,7 @@ pub enum RpcStatus {
     Err,
 }
 
-#[derive(Serialize, PartialEq)]
+#[derive(Serialize, PartialEq, Debug)]
 pub enum ModerationStatus {
     Allowed,
     Blocked,
@@ -68,7 +68,7 @@ pub struct FetchResponse {
     pub result: ModerationResult,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Debug)]
 pub enum DocumentStatus {
     Blocked,
     Allowed,
