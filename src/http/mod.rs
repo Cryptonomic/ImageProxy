@@ -144,20 +144,21 @@ impl HttpClientWrapper {
             HttpClientWrapper::construct_ipfs_uri(url, &self.ipfs_config.primary)?
         };
 
-        let result = self.fetch2(req_id, &uri).await;
+        let result = self.do_fetch(req_id, &uri).await;
         if result.is_err()
             && parsed_uri.scheme == UriScheme::Ipfs
             && self.ipfs_config.fallback.is_some()
         {
+            debug!("Using fallback gateway for req_id={}, url={}", req_id, url);
             let fallback_ipfs_config = self.ipfs_config.fallback.as_ref().unwrap();
             let uri = HttpClientWrapper::construct_ipfs_uri(url, fallback_ipfs_config)?;
-            self.fetch2(req_id, &uri).await
+            self.do_fetch(req_id, &uri).await
         } else {
             result
         }
     }
 
-    async fn fetch2(&self, req_id: &Uuid, uri: &Uri) -> Result<Document, Errors> {
+    async fn do_fetch(&self, req_id: &Uuid, uri: &Uri) -> Result<Document, Errors> {
         let filter_results = self
             .uri_filters
             .iter()
