@@ -148,7 +148,7 @@ impl HttpClientWrapper {
     }
 }
 
-pub struct HttpClientFactory {}
+pub struct HttpClientFactory;
 
 impl HttpClientFactory {
     pub fn get_provider(
@@ -156,13 +156,14 @@ impl HttpClientFactory {
         max_document_size: Option<u64>,
         uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
         timeout: u64,
+        useragent: Option<String>,
     ) -> HttpClientWrapper {
         assert!(
             !uri_filters.is_empty(),
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
         HttpClientWrapper {
-            client: Box::new(HyperHttpClient::new(max_document_size, timeout)),
+            client: Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
             ipfs_config,
             uri_filters,
         }
@@ -186,7 +187,7 @@ mod tests {
         let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> = vec![Box::new(
             PrivateNetworkFilter::new(Box::new(StandardDnsResolver {})),
         )];
-        let wrapper = HttpClientFactory::get_provider(ipfs_config, None, uri_filters, 10_u64);
+        let wrapper = HttpClientFactory::get_provider(ipfs_config, None, uri_filters, 10_u64, None);
 
         // Valid https url
         let result = wrapper.to_uri("https://localhost:3422/image.png");
