@@ -11,7 +11,7 @@ pub struct Cors {
     pub origin: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[allow(dead_code)]
 pub struct Host {
     pub protocol: String,
@@ -54,10 +54,16 @@ pub struct SecurityConfig {
     pub api_keys: Vec<ApiKey>,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct IpfsGatewayConfig {
+    pub primary: Host,
+    pub fallback: Option<Host>,
+}
+
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct Configuration {
-    pub ipfs: Host,
+    pub ipfs: IpfsGatewayConfig,
     pub cors: Cors,
     pub workers: u16,
     pub bind_address: Ipv4Addr,
