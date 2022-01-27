@@ -53,6 +53,22 @@ struct ParsedUri {
 }
 
 impl HttpClientWrapper {
+    pub fn new(
+        client: Box<dyn HttpClientProvider + Send + Sync>,
+        ipfs_config: IpfsGatewayConfig,
+        uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
+    ) -> Self {
+        assert!(
+            !uri_filters.is_empty(),
+            "No URI filters configured. This cannot be correct, check code."
+        );
+        HttpClientWrapper {
+            client,
+            ipfs_config,
+            uri_filters,
+        }
+    }
+
     fn parse_uri(url: &str) -> Result<ParsedUri, Errors> {
         let uri = url.parse::<Uri>().map_err(|e| {
             error!("Error parsing url={}, reason={}", url, e);
@@ -210,21 +226,22 @@ impl HttpClientFactory {
             "No URI filters provided. This is insecure, check code. Exiting..."
         );
 
-        HttpClientWrapper {
-            client: Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
+        HttpClientWrapper::new(
+            Box::new(HyperHttpClient::new(max_document_size, timeout, useragent)),
             ipfs_config,
             uri_filters,
-        }
+        )
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use std::{collections::HashMap, sync::Mutex};
+    use std::{collections::HashMap, net::IpAddr, sync::Mutex};
 
     use super::*;
-    use crate::dns::StandardDnsResolver;
+    use crate::dns::{DummyDnsResolver, StandardDnsResolver};
     use filters::private_network::PrivateNetworkFilter;
+    use hyper::body::Bytes;
 
     pub struct DummyHttpClient {
         store: Mutex<HashMap<String, Document>>,
@@ -259,6 +276,127 @@ pub mod tests {
                 None => Err(404),
             }
         }
+    }
+
+    fn construct_document(url: &str) -> Document {
+        let buffer = "Hello There";
+        Document {
+            id: Uuid::new_v4(),
+            content_type: "image/png".to_string(),
+            content_length: buffer.len() as u64,
+            bytes: Bytes::from(buffer),
+            url: url.to_string(),
+        }
+    }
+
+    /// Tests the fetch function to correctly see if uri filters
+    /// are working. Specifically tests the localhost blocking filter    
+    ///
+    #[tokio::test]
+    async fn test_fetch_block_localhost() {
+        let url = "http://localhost/abcd";
+        let dns_resolver = StandardDnsResolver {};
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
+            vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
+        let http_client = DummyHttpClient::new();
+
+        let ipfs_config = IpfsGatewayConfig {
+            primary: Host {
+                protocol: "http".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 1337,
+                path: "/ipfs".to_string(),
+            },
+            fallback: None,
+        };
+
+        let provider = HttpClientWrapper::new(Box::new(http_client), ipfs_config, uri_filters);
+        // Test the result
+        let result = provider.fetch(&Uuid::new_v4(), url).await;
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), Errors::InvalidOrBlockedHost);
+    }
+
+    /// Tests the fetch function correctly returns no document
+    /// when the primary gateway has thrown an error and no fallback
+    /// gateway is configured.
+    ///
+    /// A mock http client simulates returning a 404 for the url
+    /// pointing to the primary gateway.
+    ///
+    #[tokio::test]
+    async fn test_fetch_ipfs_no_fallback() {
+        let ipfs_url = "ipfs://abcdef";
+        let ip: IpAddr = "8.8.8.8".parse().unwrap();
+        let ip_vec = vec![ip];
+        let dns_resolver = DummyDnsResolver {
+            resolved_address: ip_vec,
+        };
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
+            vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
+        let http_client = DummyHttpClient::new();
+
+        let ipfs_config = IpfsGatewayConfig {
+            primary: Host {
+                protocol: "http".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 1337,
+                path: "/ipfs".to_string(),
+            },
+            fallback: None,
+        };
+
+        let provider = HttpClientWrapper::new(Box::new(http_client), ipfs_config, uri_filters);
+        // Test the result
+        let result = provider.fetch(&Uuid::new_v4(), ipfs_url).await;
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), Errors::FetchFailed);
+    }
+
+    /// Tests the fetch function correctly uses the fallback ipfs
+    /// gateway when the primary gateway returns an error.
+    ///
+    /// A mock http client simulates returning a 404 for the url
+    /// pointing to the primary gateway and a document for the
+    /// fallback gateway.
+    ///
+    #[tokio::test]
+    async fn test_fetch_ipfs_with_fallback() {
+        let ipfs_url = "ipfs://abcdef";
+        let ip: IpAddr = "8.8.8.8".parse().unwrap();
+        let ip_vec = vec![ip];
+        let dns_resolver = DummyDnsResolver {
+            resolved_address: ip_vec,
+        };
+        let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> =
+            vec![Box::new(PrivateNetworkFilter::new(Box::new(dns_resolver)))];
+        let mut http_client = DummyHttpClient::new();
+
+        let ipfs_config = IpfsGatewayConfig {
+            primary: Host {
+                protocol: "http".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 1337,
+                path: "/ipfs".to_string(),
+            },
+            fallback: Some(Host {
+                protocol: "https".to_string(),
+                host: "localhost.com".to_string(),
+                port: 443,
+                path: "/ipfs".to_string(),
+            }),
+        };
+        // Set the mock client to return results for the fallback url
+        let mock_url = "https://localhost.com:443/ipfs/abcdef";
+        http_client.set(mock_url, construct_document(mock_url));
+
+        let provider = HttpClientWrapper::new(Box::new(http_client), ipfs_config, uri_filters);
+
+        // Test the result
+        let result = provider.fetch(&Uuid::new_v4(), ipfs_url).await;
+        assert!(result.is_ok());
+        // Assert that the document was fetched from the fallback gateway
+        assert_eq!(result.unwrap().url, mock_url.to_string());
     }
 
     #[test]
@@ -318,9 +456,4 @@ pub mod tests {
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), Errors::InvalidUri);
     }
-
-    // let uri_filters: Vec<Box<dyn UriFilter + Send + Sync>> = vec![Box::new(
-    //     PrivateNetworkFilter::new(Box::new(StandardDnsResolver {})),
-    // )];
-    // let wrapper = HttpClientFactory::get_provider(ipfs_config, None, uri_filters, 10_u64);
 }

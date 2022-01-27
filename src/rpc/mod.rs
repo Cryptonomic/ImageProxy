@@ -247,7 +247,7 @@ mod tests {
     use hyper::body::Bytes;
     use uuid::Uuid;
 
-    use crate::config::Host;
+    use crate::config::{Host, IpfsGatewayConfig};
     use crate::db::tests::DummyDatabase;
     use crate::dns::DummyDnsResolver;
     use crate::document::Document;
@@ -275,11 +275,14 @@ mod tests {
         let database = DummyDatabase::new();
         let mut moderation_provider = DummyModerationProvider::new();
         let mut http_client = DummyHttpClient::new();
-        let ipfs_config = Host {
-            protocol: "http".to_string(),
-            host: "localhost".to_string(),
-            port: 1337,
-            path: "/ipfs".to_string(),
+        let ipfs_config = IpfsGatewayConfig {
+            primary: Host {
+                protocol: "http".to_string(),
+                host: "localhost".to_string(),
+                port: 1337,
+                path: "/ipfs".to_string(),
+            },
+            fallback: None,
         };
         let ip: IpAddr = "8.8.8.8".parse().unwrap();
         let ip_vec = vec![ip];
