@@ -78,6 +78,7 @@ pub async fn fetch(
 
     let (moderation_status, categories, document) = match db_results.get(0) {
         Some(result) => {
+            metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
                 "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, result.blocked, result.categories, result.provider
