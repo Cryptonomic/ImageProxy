@@ -10,7 +10,7 @@ use std::io::Cursor;
 use base64::encode;
 use hyper::body::Bytes;
 
-use image::{DynamicImage, GenericImageView, ImageFormat, ImageOutputFormat};
+use image::{DynamicImage, GenericImageView, ImageOutputFormat};
 use log::{error, info, warn};
 use uuid::Uuid;
 
