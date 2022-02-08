@@ -16,3 +16,4 @@ lib/*
 **/build
 .github
 **/*.md
+.cargo
