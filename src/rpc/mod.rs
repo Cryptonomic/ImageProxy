@@ -29,7 +29,7 @@ async fn fetch_document(
 ) -> Result<Arc<Document>, Errors> {
     let cache_key = sha256(url.as_bytes());
     let cached_doc = ctx.cache.as_ref().and_then(|cache| {
-        debug!("Fetched document from cache, url:{}", url);
+        debug!("Checking document cache for document, url:{}", url);
         cache.get(&cache_key)
     });
 
@@ -80,7 +80,7 @@ pub async fn fetch(
         Some(result) => {
             metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
-                "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
+                "Found cached moderation results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, result.blocked, result.categories, result.provider
             );
             let document = if !result.blocked || params.force {
@@ -92,7 +92,7 @@ pub async fn fetch(
         }
         None => {
             metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
-            info!("No cached results found for id={}", req_id);
+            info!("No cached moderation results found for id={}", req_id);
             let document = fetch_document(ctx.clone(), req_id, &params.url).await?;
             let max_document_size = ctx.moderation_provider.max_document_size();
             let supported_types = ctx.moderation_provider.supported_types();
@@ -100,10 +100,12 @@ pub async fn fetch(
 
             metrics::MODERATION.with_label_values(&["requests"]).inc();
 
+            info!("Submitting moderation request for id:{}", req_id);
             // Resize the image if required or reformat to png if required
             let mod_response = if document.bytes.len() as u64 >= max_document_size
                 || !supported_types.contains(&document_type)
             {
+                info!("Image resizing required, id={}", req_id);
                 let resized_doc = document.resize_image(max_document_size)?;
                 ctx.moderation_provider.moderate(&resized_doc).await?
             } else {
