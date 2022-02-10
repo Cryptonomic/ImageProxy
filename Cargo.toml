@@ -1,6 +1,6 @@
 [package]
 name = "nft_image_proxy"
-version = "1.4.0"
+version = "1.4.1"
 authors = ["Cryptonomic Inc."]
 edition = "2018"
 build = "build.rs"
