@@ -62,7 +62,9 @@ impl ModerationProvider for Rekognition {
     }
 
     fn max_document_size(&self) -> u64 {
-        5242880 // As per AWS documentation, 5 MB binary limit
+        // As per AWS documentation, 5 MB binary limit then scaled by
+        // generous encoding margin
+        (5242880_f64 / 1.5_f64).ceil() as u64
     }
 }
 
