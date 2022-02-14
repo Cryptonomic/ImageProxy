@@ -52,26 +52,40 @@ impl Document {
             })
     }
 
-    fn resize_parameters(x_dim: u32, y_dim: u32) -> (u32, u32) {
+    fn resize_parameters(x_dim: u32, y_dim: u32, target_dim: u32, min_dim: u32) -> (u32, u32) {
         let aspect_ratio = x_dim as f64 / y_dim as f64;
-
-        if x_dim <= NOMINAL_IMAGE_DIMENSION || y_dim <= NOMINAL_IMAGE_DIMENSION {
-            return (max(x_dim / 2_u32, 1_u32), max(y_dim / 2_u32, 1_u32));
-        }
-
         if aspect_ratio > 1_f64 {
-            let new_x_dim = aspect_ratio * (NOMINAL_IMAGE_DIMENSION as f64);
-            (new_x_dim as u32, NOMINAL_IMAGE_DIMENSION)
+            // X is larger, set it to NOMINAL_IMAGE_DIMENSION
+            let new_x_dim = target_dim as f64;
+            let new_y_dim = new_x_dim / aspect_ratio;
+
+            if new_y_dim < min_dim as f64 {
+                let new_y_dim = min_dim as f64;
+                let new_x_dim = aspect_ratio * new_y_dim;
+                (new_x_dim.floor() as u32, new_y_dim.floor() as u32)
+            } else {
+                (new_x_dim.floor() as u32, new_y_dim.floor() as u32)
+            }
         } else {
-            let new_y_dim = aspect_ratio * (NOMINAL_IMAGE_DIMENSION as f64);
-            (NOMINAL_IMAGE_DIMENSION, new_y_dim as u32)
+            // Y is larger, set it to NOMINAL_IMAGE_DIMENSION
+            let new_y_dim = target_dim as f64;
+            let new_x_dim = new_y_dim * aspect_ratio;
+
+            if new_x_dim < min_dim as f64 {
+                let new_x_dim = min_dim as f64;
+                let new_y_dim = new_x_dim / aspect_ratio;
+                (new_x_dim.floor() as u32, new_y_dim.floor() as u32)
+            } else {
+                (new_x_dim.floor() as u32, new_y_dim.floor() as u32)
+            }
         }
     }
 
-    fn resize(&self, img: DynamicImage, max_size: u64) -> Result<Vec<u8>, Errors> {
+    fn resize(&self, img: DynamicImage, target_dim: u32, max_size: u64) -> Result<Vec<u8>, Errors> {
         metrics::IMAGE_RESIZE.with_label_values(&["request"]).inc();
         let (x_dim, y_dim) = img.dimensions();
-        let (new_x_dim, new_y_dim) = Self::resize_parameters(x_dim, y_dim);
+        let (new_x_dim, new_y_dim) =
+            Self::resize_parameters(x_dim, y_dim, target_dim, MINIMUM_IMAGE_DIMENSION);
         info!(
             "Image resizing, id={}, x={}, y={}, new_x={}, new_y={}",
             self.id, x_dim, y_dim, new_x_dim, new_y_dim
@@ -90,14 +104,14 @@ impl Document {
                 if bytes.len() as u64 > max_size {
                     metrics::IMAGE_RESIZE.with_label_values(&["retry"]).inc();
                     warn!("Resizing did not reduce image size enough to fit max moderation size, id={}, max_size={}", self.id, max_size);
-                    if new_x_dim < MINIMUM_IMAGE_DIMENSION || new_y_dim < MINIMUM_IMAGE_DIMENSION {
+                    if target_dim / 2_u32 < MINIMUM_IMAGE_DIMENSION {
                         metrics::IMAGE_RESIZE
                             .with_label_values(&["dim_floor_hit"])
                             .inc();
                         warn!("Image dimension(s) is smaller than {} pixels but file size is greater than max moderation size, id={}, max_size={}", MINIMUM_IMAGE_DIMENSION, self.id, max_size );
                         Ok(bytes)
                     } else {
-                        self.resize(new_img, max_size)
+                        self.resize(new_img, target_dim / 2_u32, max_size)
                     }
                 } else {
                     metrics::IMAGE_RESIZE.with_label_values(&["success"]).inc();
@@ -136,7 +150,7 @@ impl Document {
         }
 
         let img = self.load_image()?;
-        let bytes = self.resize(img, max_size)?;
+        let bytes = self.resize(img, NOMINAL_IMAGE_DIMENSION, max_size)?;
         Ok(Document {
             id: self.id,
             content_length: bytes.len() as u64,
@@ -207,39 +221,49 @@ mod tests {
     fn test_resize_parameters() {
         let x_dim = 2048;
         let y_dim = 1500;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
-        assert!(x < x_dim);
-        assert_eq!(y, NOMINAL_IMAGE_DIMENSION);
+        let (x, y) = Document::resize_parameters(
+            x_dim,
+            y_dim,
+            NOMINAL_IMAGE_DIMENSION,
+            MINIMUM_IMAGE_DIMENSION,
+        );
+        assert_eq!(x, NOMINAL_IMAGE_DIMENSION);
+        assert!(y < y_dim);
 
         let x_dim = 1500;
         let y_dim = 2048;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
+        let (x, y) = Document::resize_parameters(
+            x_dim,
+            y_dim,
+            NOMINAL_IMAGE_DIMENSION,
+            MINIMUM_IMAGE_DIMENSION,
+        );
+        assert!(x < x_dim);
+        assert_eq!(y, NOMINAL_IMAGE_DIMENSION);
+
+        // High X aspect ratio
+        let x_dim = 2000;
+        let y_dim = 200;
+        let (x, y) = Document::resize_parameters(
+            x_dim,
+            y_dim,
+            NOMINAL_IMAGE_DIMENSION,
+            MINIMUM_IMAGE_DIMENSION,
+        );
+        assert!(x < x_dim);
+        assert_eq!(y, MINIMUM_IMAGE_DIMENSION);
+
+        // High Y aspect ratio
+        let x_dim = 200;
+        let y_dim = 2000;
+        let (x, y) = Document::resize_parameters(
+            x_dim,
+            y_dim,
+            NOMINAL_IMAGE_DIMENSION,
+            MINIMUM_IMAGE_DIMENSION,
+        );
+        assert_eq!(x, MINIMUM_IMAGE_DIMENSION);
         assert!(y < y_dim);
-        assert_eq!(x, NOMINAL_IMAGE_DIMENSION);
-
-        let x_dim = 512;
-        let y_dim = 20480;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
-        assert_eq!(x, x_dim / 2);
-        assert_eq!(y, y_dim / 2);
-
-        let x_dim = 20480;
-        let y_dim = 512;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
-        assert_eq!(x, x_dim / 2);
-        assert_eq!(y, y_dim / 2);
-
-        let x_dim = 512;
-        let y_dim = 1;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
-        assert_eq!(x, x_dim / 2);
-        assert_eq!(y, 1);
-
-        let x_dim = 1;
-        let y_dim = 512;
-        let (x, y) = Document::resize_parameters(x_dim, y_dim);
-        assert_eq!(x, 1);
-        assert_eq!(y, y_dim / 2);
     }
 
     #[test]
@@ -266,6 +290,6 @@ mod tests {
         assert!(loaded_image.is_ok());
         let dimensions = loaded_image.unwrap().dimensions();
         //TODO: Recheck why after img.resize is the y dimension of the image is off by -1
-        assert_eq!(dimensions.1, NOMINAL_IMAGE_DIMENSION - 1);
+        assert_eq!(dimensions.0, NOMINAL_IMAGE_DIMENSION);
     }
 }
