@@ -116,16 +116,24 @@ impl Document {
     }
 
     pub fn resize_image(&self, max_size: u64) -> Result<Document, Errors> {
-        if (self.bytes.len() as u64) < max_size {
-            warn!("Image resize is not required as size is below max_size, id={}, size={}, max_size={}", self.id, self.bytes.len(), max_size);
-            return Ok(self.clone());
-        }
         info!(
             "Image info, id={}, len={}, type={}",
             self.id,
             self.bytes.len(),
             self.content_type
         );
+
+        if (self.bytes.len() as u64) < max_size {
+            info!(
+                "Likely image format change, id={}, size={}, max_size={}",
+                self.id,
+                self.bytes.len(),
+                max_size
+            );
+            metrics::IMAGE_RESIZE
+                .with_label_values(&["format_change"])
+                .inc();
+        }
 
         let img = self.load_image()?;
         let bytes = self.resize(img, max_size)?;
@@ -248,12 +256,6 @@ mod tests {
 
         // Check resize logic
         let max_size_5mb = 1024_u64 * 1024_u64 * 5_u64;
-        let max_size_100mb = max_size_5mb * 20_u64;
-
-        // No resize required
-        let new_document = document.resize_image(max_size_100mb);
-        assert!(new_document.is_ok());
-        assert_eq!(document.bytes.len(), new_document.unwrap().bytes.len());
 
         // Resize required
         let new_document = document.resize_image(max_size_5mb);
