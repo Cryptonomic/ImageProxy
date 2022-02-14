@@ -64,7 +64,7 @@ impl Document {
     }
 
     fn resize(&self, img: DynamicImage, max_size: u64) -> Result<Vec<u8>, Errors> {
-        let dim_floor = 32_u32;
+        let dim_floor = 128_u32;
         let (x_dim, y_dim) = img.dimensions();
         let (new_x_dim, new_y_dim) = Self::resize_parameters(x_dim, y_dim);
         info!(
