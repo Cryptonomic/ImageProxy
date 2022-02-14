@@ -14,7 +14,12 @@ use image::{DynamicImage, GenericImageView, ImageOutputFormat};
 use log::{error, info, warn};
 use uuid::Uuid;
 
-const MINIMUM_IMAGE_DIMENSION: u32 = 1024_u32;
+// The X or Y resolution (depending on aspect ration) that is
+// used as a first attempt target by image resizing
+const NOMINAL_IMAGE_DIMENSION: u32 = 1024_u32;
+
+// The minimum dimension for either X or Y
+const MINIMUM_IMAGE_DIMENSION: u32 = 128_u32;
 
 #[derive(Clone)]
 pub struct Document {
@@ -50,21 +55,20 @@ impl Document {
     fn resize_parameters(x_dim: u32, y_dim: u32) -> (u32, u32) {
         let aspect_ratio = x_dim as f64 / y_dim as f64;
 
-        if x_dim <= MINIMUM_IMAGE_DIMENSION || y_dim <= MINIMUM_IMAGE_DIMENSION {
+        if x_dim <= NOMINAL_IMAGE_DIMENSION || y_dim <= NOMINAL_IMAGE_DIMENSION {
             return (max(x_dim / 2_u32, 1_u32), max(y_dim / 2_u32, 1_u32));
         }
 
         if aspect_ratio > 1_f64 {
-            let new_x_dim = aspect_ratio * (MINIMUM_IMAGE_DIMENSION as f64);
-            (new_x_dim as u32, MINIMUM_IMAGE_DIMENSION)
+            let new_x_dim = aspect_ratio * (NOMINAL_IMAGE_DIMENSION as f64);
+            (new_x_dim as u32, NOMINAL_IMAGE_DIMENSION)
         } else {
-            let new_y_dim = aspect_ratio * (MINIMUM_IMAGE_DIMENSION as f64);
-            (MINIMUM_IMAGE_DIMENSION, new_y_dim as u32)
+            let new_y_dim = aspect_ratio * (NOMINAL_IMAGE_DIMENSION as f64);
+            (NOMINAL_IMAGE_DIMENSION, new_y_dim as u32)
         }
     }
 
     fn resize(&self, img: DynamicImage, max_size: u64) -> Result<Vec<u8>, Errors> {
-        let dim_floor = 128_u32;
         let (x_dim, y_dim) = img.dimensions();
         let (new_x_dim, new_y_dim) = Self::resize_parameters(x_dim, y_dim);
         info!(
@@ -84,8 +88,8 @@ impl Document {
                 );
                 if bytes.len() as u64 > max_size {
                     warn!("Resizing did not reduce image size enough to fit max moderation size, id={}, max_size={}", self.id, max_size);
-                    if new_x_dim < dim_floor || new_y_dim < dim_floor {
-                        warn!("Image dimension(s) is smaller than {} pixels but file size is greater than max moderation size, id={}, max_size={}", dim_floor, self.id, max_size );
+                    if new_x_dim < MINIMUM_IMAGE_DIMENSION || new_y_dim < MINIMUM_IMAGE_DIMENSION {
+                        warn!("Image dimension(s) is smaller than {} pixels but file size is greater than max moderation size, id={}, max_size={}", MINIMUM_IMAGE_DIMENSION, self.id, max_size );
                         Ok(bytes)
                     } else {
                         self.resize(new_img, max_size)
@@ -190,13 +194,13 @@ mod tests {
         let y_dim = 1500;
         let (x, y) = Document::resize_parameters(x_dim, y_dim);
         assert!(x < x_dim);
-        assert_eq!(y, MINIMUM_IMAGE_DIMENSION);
+        assert_eq!(y, NOMINAL_IMAGE_DIMENSION);
 
         let x_dim = 1500;
         let y_dim = 2048;
         let (x, y) = Document::resize_parameters(x_dim, y_dim);
         assert!(y < y_dim);
-        assert_eq!(x, MINIMUM_IMAGE_DIMENSION);
+        assert_eq!(x, NOMINAL_IMAGE_DIMENSION);
 
         let x_dim = 512;
         let y_dim = 20480;
@@ -253,6 +257,6 @@ mod tests {
         assert!(loaded_image.is_ok());
         let dimensions = loaded_image.unwrap().dimensions();
         //TODO: Recheck why after img.resize is the y dimension of the image is off by -1
-        assert_eq!(dimensions.1, MINIMUM_IMAGE_DIMENSION - 1);
+        assert_eq!(dimensions.1, NOMINAL_IMAGE_DIMENSION - 1);
     }
 }
