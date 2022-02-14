@@ -33,12 +33,12 @@ impl ModerationProvider for Rekognition {
                 let labels = result.moderation_labels.unwrap_or_default();
                 let labels = labels
                     .into_iter()
-                    .filter(|l| l.name.is_some()) // Remove empty labels
+                    .filter(|l| l.parent_name.is_some()) // Remove empty labels
                     .map(|l| {
-                        let name = l.name.unwrap(); // This is safe
-                        Rekognition::normalize_category(name.as_str())
+                        l.parent_name()
+                            .map(|n| Rekognition::normalize_category(n))
+                            .unwrap_or(ModerationCategories::Unknown)
                     })
-                    .filter(|l| *l != ModerationCategories::Unknown)
                     .collect();
 
                 debug!(
@@ -51,7 +51,7 @@ impl ModerationProvider for Rekognition {
                 })
             }
             Err(e) => {
-                error!("Moderation failed, reason:{}", e);
+                error!("Moderation failed, id={}, reason:{}", document.id, e);
                 Err(Errors::ModerationFailed)
             }
         }
