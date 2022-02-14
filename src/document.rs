@@ -1,8 +1,8 @@
 extern crate base64;
 extern crate hyper;
 
-use crate::cache::ByteSizeable;
 use crate::rpc::error::Errors;
+use crate::{cache::ByteSizeable, metrics};
 use image::io::Reader as ImageReader;
 use std::cmp::max;
 use std::io::Cursor;
@@ -69,6 +69,7 @@ impl Document {
     }
 
     fn resize(&self, img: DynamicImage, max_size: u64) -> Result<Vec<u8>, Errors> {
+        metrics::IMAGE_RESIZE.with_label_values(&["request"]).inc();
         let (x_dim, y_dim) = img.dimensions();
         let (new_x_dim, new_y_dim) = Self::resize_parameters(x_dim, y_dim);
         info!(
@@ -87,18 +88,22 @@ impl Document {
                     bytes.len()
                 );
                 if bytes.len() as u64 > max_size {
+                    metrics::IMAGE_RESIZE.with_label_values(&["retry"]).inc();
                     warn!("Resizing did not reduce image size enough to fit max moderation size, id={}, max_size={}", self.id, max_size);
                     if new_x_dim < MINIMUM_IMAGE_DIMENSION || new_y_dim < MINIMUM_IMAGE_DIMENSION {
+                        metrics::IMAGE_RESIZE.with_label_values(&["dim_low"]).inc();
                         warn!("Image dimension(s) is smaller than {} pixels but file size is greater than max moderation size, id={}, max_size={}", MINIMUM_IMAGE_DIMENSION, self.id, max_size );
                         Ok(bytes)
                     } else {
                         self.resize(new_img, max_size)
                     }
                 } else {
+                    metrics::IMAGE_RESIZE.with_label_values(&["success"]).inc();
                     Ok(bytes)
                 }
             }
             Err(e) => {
+                metrics::IMAGE_RESIZE.with_label_values(&["failed"]).inc();
                 error!(
                     "Error writing out image to buffer, id={}, reason={}",
                     self.id, e

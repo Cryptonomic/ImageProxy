@@ -91,6 +91,14 @@ lazy_static! {
         &["protocol"]
     )
     .unwrap();
+    pub static ref IMAGE_RESIZE: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "image_resize",
+            "Counts various metrics around Image resizing"
+        ),
+        &["metric"]
+    )
+    .unwrap();
 }
 
 pub fn init_registry() {
@@ -120,6 +128,7 @@ pub fn init_registry() {
     REGISTRY
         .register(Box::new(URI_DESTINATION_PROTOCOL.clone()))
         .unwrap();
+    REGISTRY.register(Box::new(IMAGE_RESIZE.clone())).unwrap();
     #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();
     #[cfg(not(target_os = "macos"))]
