@@ -34,25 +34,28 @@ impl ModerationProvider for Rekognition {
                 let labels = labels
                     .into_iter()
                     .map(|l| {
-                        if let Some(parent_name) = l.parent_name() {
-                            let category = Rekognition::normalize_category(parent_name);
+                        debug!("Moderation labels: id={}, name={:?}, parent={:?}", document.id, l.name(), l.parent_name());
+                        let parent_name = l.parent_name().filter(|n| !n.is_empty());
+                        let name = l.name();
+                        if let Some(cat) = parent_name {
+                            let category = Rekognition::normalize_category(cat);
                             if category == ModerationCategories::Unknown {
                                 warn!(
                                     "Moderation category has no enum, id={}, cat={}",
-                                    document.id, parent_name
+                                    document.id, cat
                                 );
                             }
                             category
-                        } else if let Some(name) = l.name() {
+                        } else if let Some(cat) = name {
                                 warn!(
                                     "Moderation category has no parent, id={}, cat={}",
-                                    document.id, name
+                                    document.id, cat
                                 );
-                                let category = Rekognition::normalize_category(name);
+                                let category = Rekognition::normalize_category(cat);
                                 if category == ModerationCategories::Unknown {
                                     warn!(
                                         "Moderation category has no enum, id={}, cat={}",
-                                        document.id, name
+                                        document.id, cat
                                     );
                                 }
                                 category
