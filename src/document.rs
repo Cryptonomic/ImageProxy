@@ -91,7 +91,9 @@ impl Document {
                     metrics::IMAGE_RESIZE.with_label_values(&["retry"]).inc();
                     warn!("Resizing did not reduce image size enough to fit max moderation size, id={}, max_size={}", self.id, max_size);
                     if new_x_dim < MINIMUM_IMAGE_DIMENSION || new_y_dim < MINIMUM_IMAGE_DIMENSION {
-                        metrics::IMAGE_RESIZE.with_label_values(&["dim_low"]).inc();
+                        metrics::IMAGE_RESIZE
+                            .with_label_values(&["dim_floor_hit"])
+                            .inc();
                         warn!("Image dimension(s) is smaller than {} pixels but file size is greater than max moderation size, id={}, max_size={}", MINIMUM_IMAGE_DIMENSION, self.id, max_size );
                         Ok(bytes)
                     } else {
