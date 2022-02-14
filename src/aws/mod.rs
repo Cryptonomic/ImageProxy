@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::env;
 
 use crate::{
@@ -33,11 +33,36 @@ impl ModerationProvider for Rekognition {
                 let labels = result.moderation_labels.unwrap_or_default();
                 let labels = labels
                     .into_iter()
-                    .filter(|l| l.parent_name.is_some()) // Remove empty labels
                     .map(|l| {
-                        l.parent_name()
-                            .map(|n| Rekognition::normalize_category(n))
-                            .unwrap_or(ModerationCategories::Unknown)
+                        if let Some(parent_name) = l.parent_name() {
+                            let category = Rekognition::normalize_category(parent_name);
+                            if category == ModerationCategories::Unknown {
+                                warn!(
+                                    "Moderation category has no enum, id={}, cat={}",
+                                    document.id, parent_name
+                                );
+                            }
+                            category
+                        } else if let Some(name) = l.name() {
+                                warn!(
+                                    "Moderation category has no parent, id={}, cat={}",
+                                    document.id, name
+                                );
+                                let category = Rekognition::normalize_category(name);
+                                if category == ModerationCategories::Unknown {
+                                    warn!(
+                                        "Moderation category has no enum, id={}, cat={}",
+                                        document.id, name
+                                    );
+                                }
+                                category
+                        } else {
+                                warn!(
+                                    "Moderation results returned empty labels for both name and parent_name, id={}",
+                                    document.id
+                                );
+                                ModerationCategories::Unknown
+                        }                        
                     })
                     .collect();
 
@@ -94,10 +119,7 @@ impl Rekognition {
             "Alcohol" => ModerationCategories::Alcohol,
             "Gambling" => ModerationCategories::Gambling,
             "Hate" => ModerationCategories::Hate,
-            _ => {
-                error!("Unknown moderation category encountered, cat={}", input);
-                ModerationCategories::Unknown
-            }
+            _ => ModerationCategories::Unknown,
         }
     }
 
