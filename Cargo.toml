@@ -1,6 +1,11 @@
 [package]
 name = "nft_image_proxy"
+<<<<<<< HEAD
 version = "1.4.1"
+=======
+version = "2.0.0"
+repository = "https://github.com/Cryptonomic/ImageProxy"
+>>>>>>> 25ddd5e390071213311de61df4181d9e92d01aef
 authors = ["Cryptonomic Inc."]
 edition = "2018"
 build = "build.rs"
@@ -33,7 +38,6 @@ async-trait = "0.1"
 image = "0.23"
 dns-lookup = "1"
 anyhow = "1.0"
-rust-embed="6.3"
 
 # deps for aws
 aws-config = "0.6.0"
