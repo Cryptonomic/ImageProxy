@@ -31,6 +31,8 @@ lazy_static! {
     )
     .unwrap();
     pub static ref HITS: IntCounter = IntCounter::new("hits", "Total hits").unwrap();
+    pub static ref IPFS_FALLBACK: IntCounter =
+        IntCounter::new("ipfs_fallback", "Ipfs fallback gateway usage").unwrap();
     pub static ref CACHE_METRICS: IntGaugeVec = IntGaugeVec::new(
         Opts::new("cache_metrics", "Cache metics by cache type"),
         &["type", "metric"]
@@ -108,6 +110,7 @@ lazy_static! {
 
 pub fn init_registry() {
     REGISTRY.register(Box::new(HITS.clone())).unwrap();
+    REGISTRY.register(Box::new(IPFS_FALLBACK.clone())).unwrap();
     REGISTRY.register(Box::new(MODERATION.clone())).unwrap();
     REGISTRY.register(Box::new(API_REQUESTS.clone())).unwrap();
     REGISTRY
