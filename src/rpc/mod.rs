@@ -71,9 +71,15 @@ pub async fn fetch(
             "Database moderation query skipped. Using cached results, id={}",
             req_id
         );
+        metrics::CACHE_METRICS
+            .with_label_values(&["db_cache", "hits"])
+            .inc();
         vec![result]
     } else {
         info!("Querying database for moderation results, id={}", req_id);
+        metrics::CACHE_METRICS
+            .with_label_values(&["db_cache", "misses"])
+            .inc();
         let results = ctx
             .database
             .get_moderation_result(&[params.url.clone()])
