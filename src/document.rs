@@ -4,7 +4,6 @@ extern crate hyper;
 use crate::rpc::error::Errors;
 use crate::{cache::ByteSizeable, metrics};
 use image::io::Reader as ImageReader;
-use std::cmp::max;
 use std::io::Cursor;
 
 use base64::encode;

@@ -116,6 +116,12 @@ pub async fn fetch(
                 .with_label_values(&["moderated"])
                 .inc_by(document.bytes.len() as u64);
 
+            mod_response.categories.iter().for_each(|c| {
+                metrics::MODERATION_CATEGORIES
+                    .with_label_values(&[&c.to_string()])
+                    .inc()
+            });
+
             let blocked = !mod_response.categories.is_empty();
             let mod_status: ModerationStatus = blocked.into();
 

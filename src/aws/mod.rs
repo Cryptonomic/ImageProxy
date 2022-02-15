@@ -31,7 +31,7 @@ impl ModerationProvider for Rekognition {
         match self.get_moderation_labels(&document.bytes).await {
             Ok(result) => {
                 let labels = result.moderation_labels.unwrap_or_default();
-                let labels = labels
+                let mut labels: Vec<ModerationCategories> = labels
                     .into_iter()
                     .map(|l| {
                         debug!("Moderation labels: id={}, name={:?}, parent={:?}", document.id, l.name(), l.parent_name());
@@ -68,6 +68,9 @@ impl ModerationProvider for Rekognition {
                         }                        
                     })
                     .collect();
+
+                labels.sort();
+                labels.dedup();
 
                 debug!(
                     "Moderation labels for id={}, labels={:?}",
