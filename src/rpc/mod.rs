@@ -102,6 +102,11 @@ pub async fn fetch(
                 "Database has moderation results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, result.blocked, result.categories, result.provider
             );
+            result.categories.iter().for_each(|c| {
+                metrics::MODERATION_CATEGORIES
+                    .with_label_values(&[&c.to_string()])
+                    .inc()
+            });
             let document = if !result.blocked || params.force {
                 Some(fetch_document(ctx.clone(), req_id, &params.url).await?)
             } else {
