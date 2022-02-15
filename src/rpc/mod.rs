@@ -82,6 +82,7 @@ pub async fn fetch(
                 error!("Error querying database for id={}, reason={}", req_id, e);
                 Errors::InternalError
             })?;
+        info!("Query result, id={}, rows={}", req_id, results.len());
         results.iter().for_each(|r| {
             ctx.db_cache.insert(r.url.clone(), r.clone());
         });
@@ -92,7 +93,7 @@ pub async fn fetch(
         Some(result) => {
             metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
-                "Found cached moderation results for id={}, blocked={}, categories:{:?}, provider:{:?}",
+                "Database has moderation results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, result.blocked, result.categories, result.provider
             );
             let document = if !result.blocked || params.force {
@@ -104,7 +105,7 @@ pub async fn fetch(
         }
         None => {
             metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
-            info!("No cached moderation results found for id={}", req_id);
+            info!("Database has no moderation results for id={}", req_id);
             let document = fetch_document(ctx.clone(), req_id, &params.url).await?;
             let max_document_size = ctx.moderation_provider.max_document_size();
             let supported_types = ctx.moderation_provider.supported_types();
