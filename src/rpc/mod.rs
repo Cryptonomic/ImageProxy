@@ -66,15 +66,27 @@ pub async fn fetch(
         info!("Document id={} has forced flag enabled.", req_id);
     }
 
-    let urls = vec![params.url.clone()];
-    let db_results = ctx
-        .database
-        .get_moderation_result(&urls)
-        .await
-        .map_err(|e| {
-            error!("Error querying database for id={}, reason={}", req_id, e);
-            Errors::InternalError
-        })?;
+    let db_results = if let Some(result) = ctx.db_cache.get(&params.url) {
+        info!(
+            "Database moderation query skipped. Using cached results, id={}",
+            req_id
+        );
+        vec![result]
+    } else {
+        info!("Querying database for moderation results, id={}", req_id);
+        let results = ctx
+            .database
+            .get_moderation_result(&[params.url.clone()])
+            .await
+            .map_err(|e| {
+                error!("Error querying database for id={}, reason={}", req_id, e);
+                Errors::InternalError
+            })?;
+        results.iter().for_each(|r| {
+            ctx.db_cache.insert(r.url.clone(), r.clone());
+        });
+        results
+    };
 
     let (moderation_status, categories, document) = match db_results.get(0) {
         Some(result) => {
@@ -264,6 +276,7 @@ pub async fn describe_report(
 #[cfg(test)]
 mod tests {
     use hyper::body::Bytes;
+    use moka::sync::Cache as MokaCache;
     use uuid::Uuid;
 
     use crate::config::{Host, IpfsGatewayConfig};
@@ -327,6 +340,7 @@ mod tests {
             moderation_provider: Box::new(moderation_provider),
             http_client_provider,
             cache: None,
+            db_cache: Arc::new(MokaCache::new(10)),
         };
 
         Arc::new(context)

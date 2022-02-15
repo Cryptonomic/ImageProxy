@@ -34,6 +34,7 @@ image = "0.23"
 dns-lookup = "1"
 anyhow = "1.0"
 rust-embed="6.3"
+moka = "0.7"
 
 # deps for aws
 aws-config = "0.6.0"

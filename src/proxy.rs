@@ -3,7 +3,7 @@ extern crate tokio_postgres;
 
 use crate::cache::{get_cache, Cache};
 use crate::config::{Cors, SecurityConfig};
-use crate::db::{DatabaseFactory, DatabaseProvider};
+use crate::db::{DatabaseFactory, DatabaseProvider, DbModerationRow};
 use crate::dns::StandardDnsResolver;
 use crate::document::Document;
 
@@ -27,10 +27,10 @@ use crate::{
 };
 
 use chrono::Utc;
-
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::{debug, error};
+use moka::sync::Cache as MokaCache;
 use prometheus::Encoder;
 use rust_embed::RustEmbed;
 use serde::de;
@@ -52,6 +52,7 @@ pub struct Context {
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client_provider: HttpClientWrapper,
     pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
+    pub db_cache: Arc<MokaCache<String, DbModerationRow>>,
 }
 
 impl Context {
@@ -74,6 +75,7 @@ impl Context {
             moderation_provider,
             http_client_provider: http_client,
             cache: get_cache(&config.cache_config),
+            db_cache: Arc::new(MokaCache::new(10000)),
         })
     }
 }
