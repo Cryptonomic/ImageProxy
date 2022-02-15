@@ -110,6 +110,7 @@ pub async fn fetch(
             let document = if !result.blocked || params.force {
                 Some(fetch_document(ctx.clone(), req_id, &params.url).await?)
             } else {
+                metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
                 None
             };
             (result.blocked.into(), result.categories.clone(), document)
