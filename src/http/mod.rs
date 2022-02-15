@@ -149,7 +149,8 @@ impl HttpClientWrapper {
             && parsed_uri.scheme == UriScheme::Ipfs
             && self.ipfs_config.fallback.is_some()
         {
-            debug!("Using fallback gateway for req_id={}, url={}", req_id, url);
+            info!("Using fallback gateway for req_id={}, url={}", req_id, url);
+            metrics::IPFS_FALLBACK.inc();
             let fallback_ipfs_config = self.ipfs_config.fallback.as_ref().unwrap();
             let uri = HttpClientWrapper::construct_ipfs_uri(url, fallback_ipfs_config)?;
             self.do_fetch(req_id, &uri).await
