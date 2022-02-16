@@ -31,6 +31,8 @@ lazy_static! {
     )
     .unwrap();
     pub static ref HITS: IntCounter = IntCounter::new("hits", "Total hits").unwrap();
+    pub static ref IPFS_FALLBACK: IntCounter =
+        IntCounter::new("ipfs_fallback", "Ipfs fallback gateway usage").unwrap();
     pub static ref CACHE_METRICS: IntGaugeVec = IntGaugeVec::new(
         Opts::new("cache_metrics", "Cache metics by cache type"),
         &["type", "metric"]
@@ -71,6 +73,11 @@ lazy_static! {
         IntCounterVec::new(Opts::new("traffic", "Traffic stats in bytes"), &["metric"]).unwrap();
     pub static ref MODERATION: IntCounterVec =
         IntCounterVec::new(Opts::new("moderation", "Moderation stats"), &["metric"]).unwrap();
+    pub static ref MODERATION_CATEGORIES: IntCounterVec = IntCounterVec::new(
+        Opts::new("moderation_categories", "Moderation Categories"),
+        &["category"]
+    )
+    .unwrap();
     pub static ref DOCUMENT_SIZE: HistogramVec = HistogramVec::new(
         HistogramOpts::new("doc_size", "Document Size").buckets(DOCUMENT_SIZE_BUCKETS.clone()),
         &["size_bytes"]
@@ -91,10 +98,19 @@ lazy_static! {
         &["protocol"]
     )
     .unwrap();
+    pub static ref IMAGE_RESIZE: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "image_resize",
+            "Counts various metrics around Image resizing"
+        ),
+        &["metric"]
+    )
+    .unwrap();
 }
 
 pub fn init_registry() {
     REGISTRY.register(Box::new(HITS.clone())).unwrap();
+    REGISTRY.register(Box::new(IPFS_FALLBACK.clone())).unwrap();
     REGISTRY.register(Box::new(MODERATION.clone())).unwrap();
     REGISTRY.register(Box::new(API_REQUESTS.clone())).unwrap();
     REGISTRY
@@ -119,6 +135,10 @@ pub fn init_registry() {
         .unwrap();
     REGISTRY
         .register(Box::new(URI_DESTINATION_PROTOCOL.clone()))
+        .unwrap();
+    REGISTRY.register(Box::new(IMAGE_RESIZE.clone())).unwrap();
+    REGISTRY
+        .register(Box::new(MODERATION_CATEGORIES.clone()))
         .unwrap();
     #[cfg(not(target_os = "macos"))]
     let pc = ProcessCollector::for_self();

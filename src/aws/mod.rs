@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::env;
 
 use crate::{
@@ -31,15 +31,46 @@ impl ModerationProvider for Rekognition {
         match self.get_moderation_labels(&document.bytes).await {
             Ok(result) => {
                 let labels = result.moderation_labels.unwrap_or_default();
-                let labels = labels
+                let mut labels: Vec<ModerationCategories> = labels
                     .into_iter()
-                    .filter(|l| l.name.is_some()) // Remove empty labels
                     .map(|l| {
-                        let name = l.name.unwrap(); // This is safe
-                        Rekognition::normalize_category(name.as_str())
+                        debug!("Moderation labels: id={}, name={:?}, parent={:?}", document.id, l.name(), l.parent_name());
+                        let parent_name = l.parent_name().filter(|n| !n.is_empty());
+                        let name = l.name();
+                        if let Some(cat) = parent_name {
+                            let category = Rekognition::normalize_category(cat);
+                            if category == ModerationCategories::Unknown {
+                                warn!(
+                                    "Moderation category has no enum, id={}, cat={}",
+                                    document.id, cat
+                                );
+                            }
+                            category
+                        } else if let Some(cat) = name {
+                                warn!(
+                                    "Moderation category has no parent, id={}, cat={}",
+                                    document.id, cat
+                                );
+                                let category = Rekognition::normalize_category(cat);
+                                if category == ModerationCategories::Unknown {
+                                    warn!(
+                                        "Moderation category has no enum, id={}, cat={}",
+                                        document.id, cat
+                                    );
+                                }
+                                category
+                        } else {
+                                warn!(
+                                    "Moderation results returned empty labels for both name and parent_name, id={}",
+                                    document.id
+                                );
+                                ModerationCategories::Unknown
+                        }                        
                     })
-                    .filter(|l| *l != ModerationCategories::Unknown)
                     .collect();
+
+                labels.sort();
+                labels.dedup();
 
                 debug!(
                     "Moderation labels for id={}, labels={:?}",
@@ -51,7 +82,7 @@ impl ModerationProvider for Rekognition {
                 })
             }
             Err(e) => {
-                error!("Moderation failed, reason:{}", e);
+                error!("Moderation failed, id={}, reason:{}", document.id, e);
                 Err(Errors::ModerationFailed)
             }
         }
@@ -62,7 +93,9 @@ impl ModerationProvider for Rekognition {
     }
 
     fn max_document_size(&self) -> u64 {
-        5242880 // As per AWS documentation, 5 MB binary limit
+        // As per AWS documentation, 5 MB binary limit then scaled by
+        // generous encoding margin
+        (5242880_f64 / 1.5_f64).ceil() as u64
     }
 }
 
@@ -92,10 +125,7 @@ impl Rekognition {
             "Alcohol" => ModerationCategories::Alcohol,
             "Gambling" => ModerationCategories::Gambling,
             "Hate" => ModerationCategories::Hate,
-            _ => {
-                error!("Unknown moderation category encountered, cat={}", input);
-                ModerationCategories::Unknown
-            }
+            _ => ModerationCategories::Unknown,
         }
     }
 

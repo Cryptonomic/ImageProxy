@@ -29,7 +29,7 @@ async fn fetch_document(
 ) -> Result<Arc<Document>, Errors> {
     let cache_key = sha256(url.as_bytes());
     let cached_doc = ctx.cache.as_ref().and_then(|cache| {
-        debug!("Fetched document from cache, url:{}", url);
+        debug!("Checking document cache for document, url:{}", url);
         cache.get(&cache_key)
     });
 
@@ -66,32 +66,58 @@ pub async fn fetch(
         info!("Document id={} has forced flag enabled.", req_id);
     }
 
-    let urls = vec![params.url.clone()];
-    let db_results = ctx
-        .database
-        .get_moderation_result(&urls)
-        .await
-        .map_err(|e| {
-            error!("Error querying database for id={}, reason={}", req_id, e);
-            Errors::InternalError
-        })?;
+    let db_results = if let Some(result) = ctx.db_cache.get(&params.url) {
+        info!(
+            "Database moderation query skipped. Using cached results, id={}",
+            req_id
+        );
+        metrics::CACHE_METRICS
+            .with_label_values(&["db_cache", "hits"])
+            .inc();
+        vec![result]
+    } else {
+        info!("Querying database for moderation results, id={}", req_id);
+        metrics::CACHE_METRICS
+            .with_label_values(&["db_cache", "misses"])
+            .inc();
+        let results = ctx
+            .database
+            .get_moderation_result(&[params.url.clone()])
+            .await
+            .map_err(|e| {
+                error!("Error querying database for id={}, reason={}", req_id, e);
+                Errors::InternalError
+            })?;
+        info!("Query result, id={}, rows={}", req_id, results.len());
+        results.iter().for_each(|r| {
+            ctx.db_cache.insert(r.url.clone(), r.clone());
+        });
+        results
+    };
 
     let (moderation_status, categories, document) = match db_results.get(0) {
         Some(result) => {
+            metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
-                "Found cached results for id={}, blocked={}, categories:{:?}, provider:{:?}",
+                "Database has moderation results for id={}, blocked={}, categories:{:?}, provider:{:?}",
                 req_id, result.blocked, result.categories, result.provider
             );
+            result.categories.iter().for_each(|c| {
+                metrics::MODERATION_CATEGORIES
+                    .with_label_values(&[&c.to_string()])
+                    .inc()
+            });
             let document = if !result.blocked || params.force {
                 Some(fetch_document(ctx.clone(), req_id, &params.url).await?)
             } else {
+                metrics::DOCUMENT.with_label_values(&["blocked"]).inc();
                 None
             };
             (result.blocked.into(), result.categories.clone(), document)
         }
         None => {
             metrics::MODERATION.with_label_values(&["cache_miss"]).inc();
-            info!("No cached results found for id={}", req_id);
+            info!("Database has no moderation results for id={}", req_id);
             let document = fetch_document(ctx.clone(), req_id, &params.url).await?;
             let max_document_size = ctx.moderation_provider.max_document_size();
             let supported_types = ctx.moderation_provider.supported_types();
@@ -99,10 +125,12 @@ pub async fn fetch(
 
             metrics::MODERATION.with_label_values(&["requests"]).inc();
 
+            info!("Submitting moderation request for id:{}", req_id);
             // Resize the image if required or reformat to png if required
             let mod_response = if document.bytes.len() as u64 >= max_document_size
                 || !supported_types.contains(&document_type)
             {
+                info!("Image resizing required, id={}", req_id);
                 let resized_doc = document.resize_image(max_document_size)?;
                 ctx.moderation_provider.moderate(&resized_doc).await?
             } else {
@@ -112,6 +140,12 @@ pub async fn fetch(
             metrics::TRAFFIC
                 .with_label_values(&["moderated"])
                 .inc_by(document.bytes.len() as u64);
+
+            mod_response.categories.iter().for_each(|c| {
+                metrics::MODERATION_CATEGORIES
+                    .with_label_values(&[&c.to_string()])
+                    .inc()
+            });
 
             let blocked = !mod_response.categories.is_empty();
             let mod_status: ModerationStatus = blocked.into();
@@ -255,6 +289,7 @@ pub async fn describe_report(
 #[cfg(test)]
 mod tests {
     use hyper::body::Bytes;
+    use moka::sync::Cache as MokaCache;
     use uuid::Uuid;
 
     use crate::config::{Host, IpfsGatewayConfig};
@@ -318,6 +353,7 @@ mod tests {
             moderation_provider: Box::new(moderation_provider),
             http_client_provider,
             cache: None,
+            db_cache: Arc::new(MokaCache::new(10)),
         };
 
         Arc::new(context)

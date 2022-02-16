@@ -28,7 +28,7 @@ impl SupportedMimeTypes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ModerationCategories {
     ExplicitNudity,
     Suggestive,
@@ -42,6 +42,13 @@ pub enum ModerationCategories {
     Hate,
     Unknown,
 }
+
+impl std::fmt::Display for ModerationCategories {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Clone)]
 pub struct ModerationResponse {
     pub categories: Vec<ModerationCategories>,

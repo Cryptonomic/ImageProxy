@@ -21,8 +21,8 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(feature = "jemalloc")]
-use jemallocator::Jemalloc;
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
 
 use hyper::{
     service::{make_service_fn, service_fn},
@@ -42,7 +42,8 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-#[cfg(feature = "jemalloc")]
+
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

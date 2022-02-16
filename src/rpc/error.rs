@@ -26,6 +26,7 @@ pub enum Errors {
     InvalidUri,
     InvalidOrBlockedHost,
     TimedOut,
+    ImageResizeError,
 }
 
 impl Errors {
@@ -48,6 +49,7 @@ impl Errors {
                 111,
                 "Connection/Request/Response from the destination timed out".to_string(),
             ),
+            Errors::ImageResizeError => (112, "Image Resize Error".to_string()),
         };
 
         RpcError {

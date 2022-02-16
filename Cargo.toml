@@ -34,7 +34,7 @@ async-trait = "0.1"
 image = "0.23"
 dns-lookup = "1"
 anyhow = "1.0"
-jemallocator = { version = "0.3", optional = true }
+moka = "0.7"
 
 # deps for aws
 aws-config = "0.6.0"
@@ -45,9 +45,14 @@ aws-types = "0.6.0"
 # Overrides to address vulns
 time = "0.3"
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { version="0.4", features=[ "background_threads_runtime_support", "background_threads"] }
+
+
+[dev-dependencies]
+rand = "0.8.4"
+
 [profile.release]
 lto = true
 
 [features]
-default = ["jemalloc"]
-jemalloc = ["jemallocator"]
