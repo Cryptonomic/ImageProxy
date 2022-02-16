@@ -7,29 +7,48 @@ use async_trait::async_trait;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
-use log::debug;
+use log::{debug, info};
+use native_tls::{Certificate, TlsConnector};
+use postgres_native_tls::MakeTlsConnector;
+use std::fs;
 use std::time::Duration;
-use tokio_postgres::NoTls;
 use uuid::Uuid;
 
 use super::{DatabaseProvider, DbModerationRow, DbReportRow, Result};
 
 #[derive(Clone)]
 pub struct PostgresDatabase {
-    pool: Pool<PostgresConnectionManager<NoTls>>,
+    pool: Pool<PostgresConnectionManager<MakeTlsConnector>>,
 }
 
 impl PostgresDatabase {
     pub async fn new(config: &DatabaseConfig) -> Result<PostgresDatabase> {
+        let ssl_mode = config
+            .ssl_mode
+            .clone()
+            .unwrap_or_else(|| "prefer".to_string());
+
+        info!("Ssl mode for postgres is `{}`", ssl_mode);
+
         let connection_string = format!(
-            "postgresql://{}:{}@{}:{}",
-            config.username, config.password, config.host, config.port
+            "postgresql://{}:{}@{}:{}?sslmode={}",
+            config.username, config.password, config.host, config.port, ssl_mode
         );
-        let pg_mgr = PostgresConnectionManager::new_from_stringlike(
-            connection_string,
-            tokio_postgres::NoTls,
-        )
-        .unwrap();
+
+        let connector = if let Some(ca_certificate_path) = &config.ca_cert {
+            info!("Reading ca certificate file from `{}`", ca_certificate_path);
+            let cert = fs::read(ca_certificate_path)?;
+            let cert = Certificate::from_pem(&cert)?;
+            TlsConnector::builder().add_root_certificate(cert).build()?
+        } else {
+            info!("Certificate verification will use system specific certificates");
+            TlsConnector::builder().build()?
+        };
+
+        let connector = MakeTlsConnector::new(connector);
+
+        let pg_mgr =
+            PostgresConnectionManager::new_from_stringlike(connection_string, connector).unwrap();
 
         Ok(PostgresDatabase {
             pool: Pool::builder()
