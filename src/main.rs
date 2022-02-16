@@ -42,7 +42,6 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -79,9 +78,6 @@ fn main() {
         built_info::PKG_VERSION,
         built_info::GIT_VERSION.unwrap()
     );
-
-    #[cfg(feature = "jemalloc")]
-    info!("Using Jemallocator for memory allocations");
 
     info!("Loading configuration file");
     let config = Configuration::load().unwrap();
