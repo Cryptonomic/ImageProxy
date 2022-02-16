@@ -5,6 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use log::info;
 use uuid::Uuid;
 
 mod postgres;
@@ -64,6 +65,7 @@ impl DatabaseFactory {
     pub async fn get_provider(
         config: &DatabaseConfig,
     ) -> Result<Box<dyn DatabaseProvider + Send + Sync>> {
+        info!("Initializing database pools");
         let db = PostgresDatabase::new(config).await?;
         Ok(Box::new(db))
     }
