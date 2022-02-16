@@ -19,6 +19,7 @@ pub struct Host {
     pub port: u16,
     pub path: String,
 }
+
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct DatabaseConfig {
@@ -30,6 +31,8 @@ pub struct DatabaseConfig {
     pub pool_max_connections: u32,
     pub pool_idle_connections: u32,
     pub pool_connection_timeout: u64,
+    pub ssl_mode: Option<String>,
+    pub ca_cert: Option<String>,
 }
 #[derive(Deserialize, Clone)]
 pub struct AwsConfig {
