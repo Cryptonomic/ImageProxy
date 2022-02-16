@@ -35,6 +35,8 @@ dns-lookup = "1"
 anyhow = "1.0"
 rust-embed="6.3"
 moka = "0.7"
+native-tls = "0.2"
+postgres-native-tls = "0.5"
 
 # deps for aws
 aws-config = "0.6.0"
