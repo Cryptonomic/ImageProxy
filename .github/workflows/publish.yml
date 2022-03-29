@@ -2,11 +2,6 @@ name: Publish artifacts
 
 on:
   workflow_dispatch:
-    inputs:
-      docker_tags:
-        description: "Additional docker tags"
-        default: ""
-        required: false
 
 jobs:
   docker:
