@@ -48,6 +48,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-      - run: ls -lrt
-      - run: ls -lrt ~/.cargo
-      - run: ls -lrt ~/
+      - run: .github/scripts/e2e.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{secret.AWS_GITHUB_CI_ACCESS_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secret.AWS_GITHUB_CI_ACCESS_KEY_SECRET}}.
