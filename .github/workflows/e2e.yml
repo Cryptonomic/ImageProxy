@@ -24,6 +24,14 @@ jobs:
         with:
           path: ./target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-dependencies
+        with:
+          path: |
+            ./lib/npm/node_modules
+          key: ${{ runner.os }}-npm-cache-${{ hashFiles('lib/npm/package-lock.json') }}
       - uses: actions/setup-node@v2
         with:
           node-version: "16"
