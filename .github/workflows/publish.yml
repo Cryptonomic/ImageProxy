@@ -27,9 +27,6 @@ jobs:
         with:
           images: cryptonomictech/nft-image-proxy
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
       - run: echo "${{ steps.meta.outputs.tags }}"
       - run: echo "${{ steps.meta.outputs.labels }}"
