@@ -3,7 +3,7 @@
 CURR_DIR=`pwd`
 
 # Reconfigure proxy configuration
-sed -i 's/"host": "database"/"host": "localhos221"/' ./proxy.conf 
+sed -i 's/"host": "database"/"host": "localhost"/' ./proxy.conf 
 sed -i 's/expose/ports/' ./docker-compose.yml
 sed -i 's/5432/5432:5432/' ./docker-compose.yml
 
@@ -29,14 +29,14 @@ do
 done
 
 if [[ ! -d "/proc/${PID}" ]]
-then
-    echo "Proxy failed to start"
-    echo "E2E test failed"
+then    
     if [[ -f "log/proxy.log" ]]
     then
         cat "log/proxy.log"
-    fi
+    fi    
     docker-compose down
+    echo "Proxy failed to start"
+    echo "E2E test failed"
     exit 1
 fi
 
