@@ -55,6 +55,7 @@ export async function proxyFetch(
     try {
       return JSON.parse(text);
     } catch (e) {
+      console.log('error', e);
       return text;
     }
   });
