@@ -6,8 +6,8 @@ CURR_DIR=`pwd`
 sed -i 's/"host": "database"/"host": "localhost"/' ./proxy.conf 
 sed -i 's/expose/ports/' ./docker-compose.yml
 sed -i 's/5432/5432:5432/' ./docker-compose.yml
-sed -i 's/"sql:/docker-entrypoint-initdb.d/"/"./sql:/docker-entrypoint-initdb.d/"' ./docker-compose.yml
-sed -i 's/"sql:/docker-entrypoint-initdb.d/"/"./sql:/docker-entrypoint-initdb.d/"' ./docker-compose.yml
+sed -i 's/"sql:/docker-entrypoint-initdb.d/"/"./sql:/docker-entrypoint-initdb.d/"/' ./docker-compose.yml
+sed -i 's/"sql:/docker-entrypoint-initdb.d/"/"./sql:/docker-entrypoint-initdb.d/"/' ./docker-compose.yml
 
 # Start the database
 echo "Starting database..."
