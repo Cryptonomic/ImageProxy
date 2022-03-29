@@ -18,17 +18,16 @@ jobs:
       RUSTDOCFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
     steps:
       - uses: actions/checkout@v2
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-dependencies
+      - name: Cache cargo registry
+        uses: actions/cache@v1
         with:
-          path: |
-            ~/.cargo/bin            
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-proxy-test-cache-${{ hashFiles('Cargo.lock') }}
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo build
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-test-target-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
