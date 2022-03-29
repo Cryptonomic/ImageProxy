@@ -30,10 +30,8 @@ done
 
 if [[ -d "/proc/${PID}" ]]
     echo "Proxy failed to start"
-    echo "E2E test failed"
-    if [[ -f "log/proxy.log" ]]
-        cat "log/proxy.log"
-    fi
+    echo "E2E test failed"    
+    cat "log/proxy.log"
     exit 1
 fi
 
