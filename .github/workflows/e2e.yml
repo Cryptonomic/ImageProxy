@@ -37,6 +37,9 @@ jobs:
         working-directory: ./lib/npm
       - uses: actions-rs/cargo@v1
         with:
+          command: clean
+      - uses: actions-rs/cargo@v1
+        with:
           command: build
       - run: .github/scripts/e2e.sh
         env:
