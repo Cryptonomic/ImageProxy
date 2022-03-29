@@ -24,7 +24,7 @@ while [[ $status -ne 0 ]] && [[ -d "/proc/${PID}" ]]
 do   
     sleep 5
     echo "Waiting for proxy to start..."
-    curl -s http://localhost:3000/info
+    curl -s http://localhost:3000/info > /dev/null
     status=$?
 done
 
@@ -52,7 +52,8 @@ docker-compose down
 kill -9 $PID
 
 # Report result
-if [ -f "failed.out" ]; then  
+if [ -f "failed.out" ]; then
+  rm failed.out
   echo "E2E test failed"
   exit 1
 fi
