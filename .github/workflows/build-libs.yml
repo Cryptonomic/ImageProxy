@@ -20,10 +20,12 @@ jobs:
           cache-name: cache-dependencies
         with:
           path: |
-            lib/npm/node_modules
+            ./lib/npm/node_modules
           key: ${{ runner.os }}-lib-cache-${{ hashFiles('lib/npm/package-lock.json') }}
       - uses: actions/setup-node@v2
         with:
           node-version: "16"
       - run: npm ci
+        working-directory: ./lib/npm
       - run: npm run build
+        working-directory: ./lib/npm
