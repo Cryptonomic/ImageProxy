@@ -44,6 +44,7 @@ fi
 echo "Starting e2e test..."
 cd lib/npm/
 npm run test &> e2e.log || touch "${CURR_DIR}/failed.out"
+echo "Outputting test results..."
 cat e2e.log
 
 # Clean up
