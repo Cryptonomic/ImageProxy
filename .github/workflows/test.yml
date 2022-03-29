@@ -26,7 +26,7 @@ jobs:
       - name: Cache cargo build
         uses: actions/cache@v1
         with:
-          path: target
+          path: ./target
           key: ${{ runner.os }}-cargo-test-target-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
