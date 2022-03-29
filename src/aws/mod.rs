@@ -11,11 +11,11 @@ use crate::{
     rpc::error::Errors,
 };
 
-use aws_sdk_rekognition::error::DetectModerationLabelsError;
+use aws_sdk_rekognition::{error::DetectModerationLabelsError, types::{Blob, SdkError}};
 use aws_sdk_rekognition::model::Image;
 use aws_sdk_rekognition::output::DetectModerationLabelsOutput;
-use aws_sdk_rekognition::SdkError;
-use aws_sdk_rekognition::{Blob, Client as ClientRekognition, Region};
+
+use aws_sdk_rekognition::{ Client as ClientRekognition, Region};
 
 pub struct Rekognition {
     pub region: String,
