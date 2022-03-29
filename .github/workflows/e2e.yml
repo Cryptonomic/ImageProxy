@@ -1,4 +1,4 @@
-name: build
+name: e2e
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  proxy:
+  e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,19 +24,6 @@ jobs:
         with:
           path: ./target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-  npm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
       - name: Cache dependencies
         uses: actions/cache@v3
         env:
@@ -48,7 +35,18 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: "16"
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
       - run: npm ci
         working-directory: ./lib/npm
-      - run: npm run build
-        working-directory: ./lib/npm
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+      - run: .github/scripts/e2e.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_SECRET }}
