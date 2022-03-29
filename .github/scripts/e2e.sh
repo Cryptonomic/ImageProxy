@@ -15,7 +15,7 @@ sleep 10
 
 # Run the proxy and capture its pid
 echo "Starting proxy..."
-cargo run &
+RUST_BACKTRACE=1 cargo run &
 PID=$!
 
 status=1
@@ -27,6 +27,15 @@ do
     curl -s http://localhost:3000/info
     status=$?
 done
+
+if [[ -d "/proc/${PID}" ]]
+    echo "Proxy failed to start"
+    echo "E2E test failed"
+    if [[ -f "log/proxy.log" ]]
+        cat "log/proxy.log"
+    fi
+    exit 1
+fi
 
 # Run the npm e2e test
 echo "Starting e2e test..."
