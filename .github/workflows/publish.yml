@@ -4,31 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       docker_tags:
-        description: 'Additional docker tags'
-        default: ''
+        description: "Additional docker tags"
+        default: ""
         required: false
 
 jobs:
-  docker:    
+  docker:
     runs-on: ubuntu-latest
-    steps:    
-    - name: Send greeting
-      run: echo "Hello ${{ github.event.inputs.name }}"
-    - name: Checkout code
-      uses: actions/checkout@v2
-    - name: Login to DockerHub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: Extract metadata (tags, labels) for Docker
-      id: meta
-      uses: docker/metadata-action@v3
-      with:
-        images: cryptonomictech/nft-image-proxy        
-        tags: | 
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-    - run:  echo "${{ steps.meta.outputs.tags }}"
+    steps:
+      - name: Send greeting
+        run: echo "Hello ${{ github.event.inputs.name }}"
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: cryptonomictech/nft-image-proxy
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - run: echo "${{ steps.meta.outputs.tags }}"
+      - run: echo "${{ steps.meta.outputs.labels }}"
