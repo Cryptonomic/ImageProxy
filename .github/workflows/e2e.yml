@@ -37,11 +37,8 @@ jobs:
         working-directory: ./lib/npm
       - uses: actions-rs/cargo@v1
         with:
-          command: clean
-      - uses: actions-rs/cargo@v1
-        with:
           command: build
       - run: .github/scripts/e2e.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_SECRET }}.
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_SECRET }}
