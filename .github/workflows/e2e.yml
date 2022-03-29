@@ -50,5 +50,5 @@ jobs:
           command: build
       - run: .github/scripts/e2e.sh
         env:
-          AWS_ACCESS_KEY_ID: ${{secret.AWS_GITHUB_CI_ACCESS_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secret.AWS_GITHUB_CI_ACCESS_KEY_SECRET}}.
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_SECRET }}.
