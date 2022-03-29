@@ -10,7 +10,7 @@ sed -i 's/5432/5432:5432/' ./docker-compose.yml
 
 # Start the database
 echo "Starting database..."
-docker-compose up database -d
+docker-compose up -d database
 sleep 10
 
 # Run the proxy and capture its pid
