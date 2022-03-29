@@ -47,8 +47,13 @@ npm run test &> e2e.log || touch "${CURR_DIR}/failed.out"
 echo "Outputting test results..."
 cat e2e.log
 
-# Clean up
 cd "${CURR_DIR}"
+
+echo ""
+echo "Outputting proxy logs..."
+cat "log/proxy.log"
+
+# Clean up
 docker-compose down
 kill -9 $PID
 

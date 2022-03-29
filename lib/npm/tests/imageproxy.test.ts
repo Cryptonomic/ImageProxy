@@ -27,6 +27,7 @@ describe("Image proxy tests", () => {
       safeUrls[0],
       ImageProxyDataType.Json
     );
+    console.log('safeFetchResult', safeFetchResult);
     const unsafeFetchResult = await safeFetch(
       server,
       safeUrls[0],
