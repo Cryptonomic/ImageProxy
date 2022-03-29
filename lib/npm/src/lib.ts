@@ -16,7 +16,7 @@ import {
   ModerationLabel,
 } from "./types";
 
-function send(server: ImageProxyServer, request: ImageProxyRequest) {
+async function send(server: ImageProxyServer, request: ImageProxyRequest) {
   const options = {
     method: "POST",
     headers: {
@@ -25,7 +25,13 @@ function send(server: ImageProxyServer, request: ImageProxyRequest) {
     },
     body: JSON.stringify(request),
   };
-  return fetch(server.url, options);
+  try {
+    return await fetch(server.url, options);
+  }
+  catch (e) {
+    console.log('error', e);
+    return undefined;
+  }
 }
 
 /**
@@ -55,7 +61,6 @@ export async function proxyFetch(
     try {
       return JSON.parse(text);
     } catch (e) {
-      console.log('error', e);
       return text;
     }
   });
