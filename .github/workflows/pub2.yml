@@ -1,7 +1,6 @@
-name: publish_artifacts
+name: pub
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       tags:
