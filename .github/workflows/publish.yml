@@ -7,8 +7,6 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - name: Send greeting
-        run: echo "Hello ${{ github.event.inputs.name }}"
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Login to DockerHub
