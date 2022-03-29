@@ -76,7 +76,7 @@ fn main() {
     info!(
         "Version:{}, Git:{}",
         built_info::PKG_VERSION,
-        built_info::GIT_VERSION.unwrap()
+        built_info::GIT_VERSION.unwrap_or_default()
     );
 
     info!("Loading configuration file");
