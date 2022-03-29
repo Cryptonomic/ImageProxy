@@ -30,3 +30,7 @@ jobs:
             type=semver,pattern={{version}}
       - run: echo "${{ steps.meta.outputs.tags }}"
       - run: echo "${{ steps.meta.outputs.labels }}"
+      - run: |
+          echo "Publishing requires a semver compliant git tag"
+          exit 1
+        if: steps.meta.outputs.tags == ''
