@@ -10,28 +10,46 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  proxy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        override: true
-    - name: Cache dependencies
-      uses: actions/cache@v2
-      env:
-        cache-name: cache-dependencies
-      with:
-        path: |
-          ~/.cargo/.crates.toml
-          ~/.cargo/.crates2.json
-          ~/.cargo/bin
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
-          target
-        key: ${{ runner.os }}-build-cache-${{ hashFiles('Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-build-cache
-    - name: Build
-      run: cargo build
+      - uses: actions/checkout@v2
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-dependencies
+        with:
+          path: |
+            ~/.cargo/bin            
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-proxy-cache-${{ hashFiles('Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-dependencies
+        with:
+          path: |
+            ./lib/npm/node_modules
+          key: ${{ runner.os }}-npm-cache-${{ hashFiles('lib/npm/package-lock.json') }}
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16"
+      - run: npm ci
+        working-directory: ./lib/npm
+      - run: npm run build
+        working-directory: ./lib/npm

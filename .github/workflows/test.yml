@@ -17,35 +17,33 @@ jobs:
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
       RUSTDOCFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        override: true
-    - name: Cache dependencies
-      uses: actions/cache@v2
-      env:
-        cache-name: cache-dependencies
-      with:
-        path: |
-          ~/.cargo/.crates.toml
-          ~/.cargo/.crates2.json
-          ~/.cargo/bin
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
-          target
-        key: ${{ runner.os }}-test-cache-${{ hashFiles('Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-build-cache
-    - name: Clean up old files
-      run: |
-        (find . -name "*.gcda" -print0 | xargs -0 rm) || true
-    - name: Run test
-      run: |
-        cargo test --workspace --all-features --no-fail-fast --verbose
-    - uses: actions-rs/grcov@v0.1
-    - name: Upload to CodeCov
-      uses: codecov/codecov-action@v2
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        directory: ${{ steps.coverage.outputs.report }}
+      - uses: actions/checkout@v2
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-dependencies
+        with:
+          path: |
+            ~/.cargo/bin            
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-proxy-test-cache-${{ hashFiles('Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - name: Clean up old files
+        run: |
+          (find . -name "*.gcda" -print0 | xargs -0 rm) || true
+      - name: Run test
+        run: |
+          cargo test --workspace --all-features --no-fail-fast --verbose
+      - uses: actions-rs/grcov@v0.1
+      - name: Upload to CodeCov
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ${{ steps.coverage.outputs.report }}
