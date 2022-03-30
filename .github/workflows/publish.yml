@@ -13,6 +13,10 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Add masks
+        run: |
+          echo "::add-mask::${{ secrets.DOCKER_USERNAME }}"
+          echo "::add-mask::${{ secrets.DOCKER_PASSWORD }}"
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Extract metadata (tags, labels) for Docker

@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: |
+      - name: Add masks
+        run: |
           echo "::add-mask::${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_ID }}"
           echo "::add-mask::${{ secrets.AWS_GITHUB_CI_ACCESS_KEY_SECRET }}"
       - name: Cache cargo registry
