@@ -23,7 +23,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
       - run: echo "IMAGE_TAGS=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
-      - run: echo -e "IMAGE_TAGS=${{ env.IMAGE_TAGS }}\ncryptonomictech/nft-image-proxy:latest" >> $GITHUB_ENV
+      - run: echo "IMAGE_TAGS=\"${{ env.IMAGE_TAGS }},cryptonomictech/nft-image-proxy:latest\"" >> $GITHUB_ENV
         if: ${{ github.event.inputs.tag_as_latest == 'true' }}
       - run: echo "${{ env.IMAGE_TAGS }}"
       - name: Validate image tags
