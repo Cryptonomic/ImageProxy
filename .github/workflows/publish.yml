@@ -22,14 +22,12 @@ jobs:
           images: cryptonomictech/nft-image-proxy
           tags: |
             type=semver,pattern={{version}}
-      - run: echo "IMAGE_TAGS=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
-      - run: echo "IMAGE_TAGS=\"${{ env.IMAGE_TAGS }},cryptonomictech/nft-image-proxy:latest\"" >> $GITHUB_ENV
-        if: ${{ github.event.inputs.tag_as_latest == 'true' }}
+            type=raw,value=latest,enable=${{ github.event.inputs.tag_as_latest == 'true' }}
       - name: Validate image tags
         run: |
           echo "Publishing requires a semver compliant git tag"
           exit 1
-        if: steps.meta.outputs.tags == ''
+        if: steps.meta.outputs.tags == '' || steps.meta.outputs.tags == 'cryptonomictech/nft-image-proxy:latest'
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Login to DockerHub
