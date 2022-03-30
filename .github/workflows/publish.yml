@@ -25,7 +25,6 @@ jobs:
       - run: echo "IMAGE_TAGS=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
       - run: echo "IMAGE_TAGS=\"${{ env.IMAGE_TAGS }},cryptonomictech/nft-image-proxy:latest\"" >> $GITHUB_ENV
         if: ${{ github.event.inputs.tag_as_latest == 'true' }}
-      - run: echo "${{ env.IMAGE_TAGS }}"
       - name: Validate image tags
         run: |
           echo "Publishing requires a semver compliant git tag"
@@ -36,12 +35,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      # - name: Build and push
-      #   uses: docker/build-push-action@v2
-      #   with:
-      #     context: .
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
