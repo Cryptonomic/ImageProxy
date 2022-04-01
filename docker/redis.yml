@@ -1,0 +1,12 @@
+# Starts a standalone redis instance.
+#
+# NOTE: Do not use this compose file in production.
+version: "3"
+
+services:
+  redis:
+    image: "bitnami/redis:latest"
+    environment:
+      - REDIS_PASSWORD=redis123
+    ports:
+      - "7000:7000"
