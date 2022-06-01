@@ -237,7 +237,7 @@ async fn rpc(
                     }
                     RpcMethods::img_proxy_report => {
                         let params = decode::<ReportRequest>(&body)?;
-                        let _ = report(ctx, &req_id, &params.params).await?;
+                        report(ctx, &req_id, &params.params).await?;
                         Ok(ReportResponse::to_response(
                             RpcStatus::Ok,
                             &params.params.url,
