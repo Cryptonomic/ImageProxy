@@ -1,8 +1,8 @@
 extern crate base64;
 extern crate hyper;
 
+use crate::metrics;
 use crate::rpc::error::Errors;
-use crate::{cache::ByteSizeable, metrics};
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
 
@@ -27,12 +27,6 @@ pub struct Document {
     pub content_length: u64,
     pub bytes: Bytes,
     pub url: String,
-}
-
-impl ByteSizeable for Document {
-    fn size_in_bytes(&self) -> u64 {
-        self.bytes.len() as u64
-    }
 }
 
 impl Document {
