@@ -33,7 +33,7 @@ pub struct HttpClientWrapper {
     uri_filters: Vec<Box<dyn UriFilter + Send + Sync>>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 enum UriScheme {
     Http,
     Https,

@@ -5,7 +5,6 @@ use crate::cache::{get_cache, Cache};
 use crate::config::{Cors, SecurityConfig};
 use crate::db::{DatabaseFactory, DatabaseProvider, DbModerationRow};
 use crate::dns::StandardDnsResolver;
-use crate::document::Document;
 
 use crate::http::filters::private_network::PrivateNetworkFilter;
 use crate::http::filters::UriFilter;
@@ -41,7 +40,7 @@ pub struct Context {
     pub database: Box<dyn DatabaseProvider + Send + Sync>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
     pub http_client_provider: HttpClientWrapper,
-    pub cache: Option<Box<dyn Cache<String, Document> + Send + Sync>>,
+    pub cache: Option<Box<dyn Cache + Send + Sync>>,
     pub db_cache: Arc<MokaCache<String, DbModerationRow>>,
 }
 
@@ -237,7 +236,7 @@ async fn rpc(
                     }
                     RpcMethods::img_proxy_report => {
                         let params = decode::<ReportRequest>(&body)?;
-                        let _ = report(ctx, &req_id, &params.params).await?;
+                        report(ctx, &req_id, &params.params).await?;
                         Ok(ReportResponse::to_response(
                             RpcStatus::Ok,
                             &params.params.url,

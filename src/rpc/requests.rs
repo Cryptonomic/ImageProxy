@@ -26,7 +26,7 @@ pub struct MethodHeader {
 }
 
 // Fetch method struct
-#[derive(Deserialize, PartialEq)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub enum ResponseType {
     Json,
     Raw,

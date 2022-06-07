@@ -44,7 +44,7 @@ async fn fetch_document(
         } else {
             if let Some(cache) = &ctx.cache {
                 debug!("Inserted document into cache, url:{}", url);
-                cache.put(cache_key, document.clone());
+                cache.put(&cache_key, &document);
             }
             Ok(document)
         }

@@ -12,7 +12,7 @@ pub struct RpcError {
     pub request_id: Uuid,
 }
 
-#[derive(std::fmt::Debug, PartialEq, Serialize)]
+#[derive(std::fmt::Debug, PartialEq, Eq, Serialize)]
 pub enum Errors {
     InvalidRpcVersionError,
     InvalidRpcMethodError,

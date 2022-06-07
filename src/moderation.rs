@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{aws::Rekognition, config::Configuration, document::Document, rpc::error::Errors};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum SupportedMimeTypes {
     ImageJpeg,
     ImagePng,
@@ -63,7 +63,7 @@ pub trait ModerationProvider: Send + Sync {
     fn max_document_size(&self) -> u64;
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum ModerationService {
     Aws,
     None,    // Used for empty api results only
