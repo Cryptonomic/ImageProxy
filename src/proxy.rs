@@ -118,21 +118,25 @@ pub async fn route(
     req: Request<Body>,
 ) -> Result<Response<Body>, GenericError> {
     metrics::HITS.inc();
-    let response_time_start = Utc::now().timestamp_millis();
     let cors_config = config.cors.clone();
     let req_id = Uuid::new_v4();
 
     let result = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
             if authenticate(&config.security, req.borrow(), &req_id) {
-                rpc(ctx, req, req_id).await.or_else(|e| {
+                let response_time_start = Utc::now().timestamp_millis();
+                let rpc_result = rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     let rpc_error = e.to_rpc_error(&req_id);
                     metrics::ERRORS_RPC
                         .with_label_values(&[rpc_error.code.to_string().as_str()])
                         .inc();
                     Ok(e.to_response(&req_id))
-                })
+                });
+                metrics::API_RESPONSE_TIME
+                    .with_label_values(&["overall"])
+                    .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
+                rpc_result
             } else {
                 empty_response(StatusCode::FORBIDDEN)
             }
@@ -142,10 +146,6 @@ pub async fn route(
         (&Method::GET, "/metrics") if config.metrics_enabled => metrics(ctx).await,
         _ => empty_response(StatusCode::OK),
     };
-
-    metrics::API_RESPONSE_TIME
-        .with_label_values(&["overall"])
-        .observe((Utc::now().timestamp_millis() - response_time_start) as f64);
 
     result
         .or_else(|e| {
