@@ -7,6 +7,7 @@ pub mod config;
 pub mod db;
 pub mod dns;
 pub mod document;
+pub mod executor;
 pub mod http;
 pub mod logging;
 pub mod metrics;
