@@ -26,16 +26,19 @@ use crate::{
 };
 
 use chrono::Utc;
+use http_body_util::{BodyExt, Full};
+use hyper::body::{Body, Bytes};
 use hyper::header::HeaderValue;
-use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::{HeaderMap, Method, Request, Response, StatusCode};
+
 use log::{debug, error};
 use moka::sync::Cache as MokaCache;
 use prometheus::Encoder;
 use serde::de;
-use serde_json;
-use std::{borrow::Borrow, sync::Arc};
+use std::sync::Arc;
 use uuid::Uuid;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
+
 pub struct Context {
     pub database: Box<dyn DatabaseProvider + Send + Sync>,
     pub moderation_provider: Box<dyn ModerationProvider + Send + Sync>,
@@ -69,8 +72,12 @@ impl Context {
     }
 }
 
-pub fn authenticate(security_config: &SecurityConfig, req: &Request<Body>, req_id: &Uuid) -> bool {
-    match req.headers().get("apikey") {
+pub fn authenticate(
+    security_config: &SecurityConfig,
+    headers: &HeaderMap<HeaderValue>,
+    req_id: &Uuid,
+) -> bool {
+    match headers.get("apikey") {
         Some(h) => match String::from_utf8(h.as_bytes().to_vec()) {
             Ok(key) => {
                 if let Some(api_key) = security_config.api_keys.iter().find(|k| k.key.eq(&key)) {
@@ -94,9 +101,9 @@ pub fn authenticate(security_config: &SecurityConfig, req: &Request<Body>, req_i
 }
 
 fn with_cors(
-    mut response: Response<Body>,
+    mut response: Response<Full<Bytes>>,
     cors_config: &Cors,
-) -> Result<Response<Body>, GenericError> {
+) -> Result<Response<Full<Bytes>>, GenericError> {
     // TODO: Cors header configs should be validated at startup
     let cors_origin: HeaderValue = cors_config.origin.to_owned().parse()?;
     response
@@ -105,18 +112,18 @@ fn with_cors(
     Ok(response)
 }
 
-fn empty_response(code: StatusCode) -> Result<Response<Body>, GenericError> {
+fn empty_response(code: StatusCode) -> Result<Response<Full<Bytes>>, GenericError> {
     Ok(Response::builder()
         .status(code)
-        .body(Body::default())
+        .body(Full::default())
         .unwrap_or_default())
 }
 
 pub async fn route(
     ctx: Arc<Context>,
     config: Arc<Configuration>,
-    req: Request<Body>,
-) -> Result<Response<Body>, GenericError> {
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<Full<Bytes>>, GenericError> {
     metrics::HITS.inc();
     let response_time_start = Utc::now().timestamp_millis();
     let cors_config = config.cors.clone();
@@ -124,7 +131,7 @@ pub async fn route(
 
     let result = match (req.method(), req.uri().path()) {
         (&Method::POST, "/") => {
-            if authenticate(&config.security, req.borrow(), &req_id) {
+            if authenticate(&config.security, req.headers(), &req_id) {
                 rpc(ctx, req, req_id).await.or_else(|e| {
                     metrics::ERRORS.inc();
                     let rpc_error = e.to_rpc_error(&req_id);
@@ -156,7 +163,7 @@ pub async fn route(
         .and_then(|r| with_cors(r, &cors_config))
 }
 
-async fn info() -> Result<Response<Body>, GenericError> {
+async fn info() -> Result<Response<Full<Bytes>>, GenericError> {
     let info = Info {
         package_version: built_info::PKG_VERSION,
         git_version: built_info::GIT_VERSION.unwrap_or("unknown"),
@@ -165,11 +172,11 @@ async fn info() -> Result<Response<Body>, GenericError> {
     Ok(Response::builder()
         .status(hyper::StatusCode::OK)
         .header(hyper::header::CONTENT_TYPE, "application/json")
-        .body(Body::from(result))
+        .body(Full::new(Bytes::from(result)))
         .unwrap_or_default())
 }
 
-async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
+async fn metrics(ctx: Arc<Context>) -> Result<Response<Full<Bytes>>, GenericError> {
     let encoder = prometheus::TextEncoder::new();
     let mut buffer = Vec::new();
 
@@ -180,7 +187,7 @@ async fn metrics(ctx: Arc<Context>) -> Result<Response<Body>, GenericError> {
     match encoder.encode(&REGISTRY.gather(), &mut buffer) {
         Ok(_) => match String::from_utf8(buffer) {
             Ok(output) => Response::builder()
-                .body(Body::from(output))
+                .body(Full::new(Bytes::from(output)))
                 .or_else(|_| empty_response(StatusCode::INTERNAL_SERVER_ERROR)),
             Err(e) => {
                 error!("Unable to covert metrics to string, reason={}", e);
@@ -203,10 +210,15 @@ fn decode<T: de::DeserializeOwned>(body: &[u8]) -> Result<T, Errors> {
 
 async fn rpc(
     ctx: Arc<Context>,
-    req: Request<Body>,
+    req: Request<hyper::body::Incoming>,
     req_id: Uuid,
-) -> Result<Response<Body>, Errors> {
-    match hyper::body::to_bytes(req.into_body()).await {
+) -> Result<Response<Full<Bytes>>, Errors> {
+    let upper = req.body().size_hint().upper().unwrap_or(u64::MAX);
+    if upper > 1024 * 64 {
+        return Err(Errors::RpcPayloadTooBigError);
+    }
+
+    match req.collect().await.map(|r| r.to_bytes()) {
         Ok(body) => match decode::<MethodHeader>(&body) {
             Ok(header) if header.jsonrpc.eq_ignore_ascii_case(VERSION) => {
                 let method = header.method;
@@ -269,10 +281,10 @@ mod tests {
 
     use super::*;
 
-    fn build_request(key: &str) -> Request<Body> {
+    fn build_request(key: &str) -> Request<Full<Bytes>> {
         Request::builder()
             .header("apikey", key)
-            .body(Body::from(""))
+            .body(Full::default())
             .unwrap()
     }
 
@@ -293,18 +305,18 @@ mod tests {
 
         // Key in api_key list
         let req = build_request("1234");
-        assert!(authenticate(&security_config, &req, &req_id));
+        assert!(authenticate(&security_config, req.headers(), &req_id));
 
         // Key in api_key list
         let req = build_request("abcd");
-        assert!(authenticate(&security_config, &req, &req_id));
+        assert!(authenticate(&security_config, req.headers(), &req_id));
 
         // Key not in api_key list
         let req = build_request("0000");
-        assert!(!authenticate(&security_config, &req, &req_id));
+        assert!(!authenticate(&security_config, req.headers(), &req_id));
 
         // No header specified
-        let req = Request::builder().body(Body::from("")).unwrap();
-        assert!(!authenticate(&security_config, &req, &req_id));
+        let req = Request::builder().body(Full::<Bytes>::default()).unwrap();
+        assert!(!authenticate(&security_config, req.headers(), &req_id));
     }
 }

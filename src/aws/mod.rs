@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use aws_config::Region;
 use log::{debug, error, warn};
 use std::env;
 
@@ -11,11 +12,8 @@ use crate::{
     rpc::error::Errors,
 };
 
-use aws_sdk_rekognition::{error::DetectModerationLabelsError, types::{Blob, SdkError}};
-use aws_sdk_rekognition::model::Image;
-use aws_sdk_rekognition::output::DetectModerationLabelsOutput;
-
-use aws_sdk_rekognition::{ Client as ClientRekognition, Region};
+use aws_sdk_rekognition::{error::SdkError, operation::detect_moderation_labels::{DetectModerationLabelsError, DetectModerationLabelsOutput}, primitives::Blob, types::Image};
+use aws_sdk_rekognition:: Client as ClientRekognition;
 
 pub struct Rekognition {
     pub region: String,
@@ -103,7 +101,7 @@ impl Rekognition {
     pub async fn get_moderation_labels(
         &self,
         bytes: &hyper::body::Bytes,
-    ) -> Result<DetectModerationLabelsOutput, SdkError<DetectModerationLabelsError>> {
+    ) -> Result<DetectModerationLabelsOutput, SdkError<DetectModerationLabelsError, >> {
         let region = Region::new(self.region.clone());
         let shared_config = aws_config::from_env().region(region).load().await;
         let client = ClientRekognition::new(&shared_config);

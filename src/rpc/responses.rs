@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use hyper::{Body, Response};
+use http_body_util::Full;
+use hyper::{body::Bytes, Response};
 use log::error;
 use serde::Serialize;
 use uuid::Uuid;
@@ -130,7 +131,7 @@ impl FetchResponse {
         moderation_status: ModerationStatus,
         categories: Vec<ModerationCategories>,
         req_id: &Uuid,
-    ) -> Response<Body> {
+    ) -> Response<Full<Bytes>> {
         match response_type {
             ResponseType::Raw => {
                 if let Some(doc) = document {
@@ -141,7 +142,7 @@ impl FetchResponse {
                         .status(200)
                         .header(hyper::header::CONTENT_TYPE, doc.content_type.clone())
                         .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
-                        .body(Body::from(doc.bytes.clone()))
+                        .body(Full::new(Bytes::from(doc.bytes.clone())))
                         .unwrap_or_default()
                 } else {
                     FetchResponse::to_response(
@@ -172,7 +173,7 @@ impl FetchResponse {
                     Ok(body) => Response::builder()
                         .status(hyper::StatusCode::OK)
                         .header(hyper::header::CONTENT_TYPE, "application/json")
-                        .body(Body::from(body))
+                        .body(Full::new(Bytes::from(body)))
                         .unwrap_or_default(),
                     Err(e) => {
                         error!("Error serializing fetch response, reason={}", e);
@@ -189,7 +190,7 @@ impl DescribeResponse {
         rpc_status: RpcStatus,
         describe_results: Vec<DescribeResult>,
         req_id: &Uuid,
-    ) -> Response<Body> {
+    ) -> Response<Full<Bytes>> {
         let result = DescribeResponse {
             jsonrpc: String::from(VERSION),
             rpc_status,
@@ -200,7 +201,7 @@ impl DescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body))
+                .body(Full::new(Bytes::from(body)))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
@@ -211,7 +212,7 @@ impl DescribeResponse {
 }
 
 impl ReportResponse {
-    pub fn to_response(rpc_status: RpcStatus, url: &str, req_id: &Uuid) -> Response<Body> {
+    pub fn to_response(rpc_status: RpcStatus, url: &str, req_id: &Uuid) -> Response<Full<Bytes>> {
         let result = ReportResponse {
             jsonrpc: String::from(VERSION),
             rpc_status,
@@ -225,7 +226,7 @@ impl ReportResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body))
+                .body(Full::new(Bytes::from(body)))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
@@ -240,7 +241,7 @@ impl ReportDescribeResponse {
         rpc_status: RpcStatus,
         results: Vec<ReportDescribeResult>,
         req_id: &Uuid,
-    ) -> Response<Body> {
+    ) -> Response<Full<Bytes>> {
         let result = ReportDescribeResponse {
             jsonrpc: String::from(VERSION),
             rpc_status,
@@ -251,7 +252,7 @@ impl ReportDescribeResponse {
             Ok(body) => Response::builder()
                 .status(hyper::StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body))
+                .body(Full::new(Bytes::from(body)))
                 .unwrap_or_default(),
             Err(e) => {
                 error!("Error serializing fetch response, reason={}", e);
