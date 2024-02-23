@@ -142,7 +142,7 @@ impl FetchResponse {
                         .status(200)
                         .header(hyper::header::CONTENT_TYPE, doc.content_type.clone())
                         .header(hyper::header::CONTENT_LENGTH, doc.bytes.len())
-                        .body(Full::new(Bytes::from(doc.bytes.clone())))
+                        .body(Full::new(doc.bytes.clone()))
                         .unwrap_or_default()
                 } else {
                     FetchResponse::to_response(

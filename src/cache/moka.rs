@@ -51,7 +51,7 @@ impl Cache for InMemoryCache {
     }
 
     fn gather_metrics(&self, metrics: &prometheus::IntGaugeVec) {
-        let current_eviction = self.insert.load(Ordering::SeqCst) as i64 - self.len() as i64;
+        let current_eviction = self.insert.load(Ordering::SeqCst) - self.len() as i64;
         let eviction = self.eviction.fetch_add(current_eviction, Ordering::SeqCst);
         let bytes_used = self
             .cache
@@ -62,13 +62,13 @@ impl Cache for InMemoryCache {
             .set(self.len() as i64);
         metrics
             .with_label_values(&["memorycache", "hit"])
-            .set(self.hit.load(Ordering::SeqCst) as i64);
+            .set(self.hit.load(Ordering::SeqCst));
         metrics
             .with_label_values(&["memorycache", "miss"])
-            .set(self.miss.load(Ordering::SeqCst) as i64);
+            .set(self.miss.load(Ordering::SeqCst));
         metrics
             .with_label_values(&["memorycache", "insert"])
-            .set(self.insert.load(Ordering::SeqCst) as i64);
+            .set(self.insert.load(Ordering::SeqCst));
         metrics
             .with_label_values(&["memorycache", "eviction"])
             .set(eviction + current_eviction);
@@ -77,7 +77,7 @@ impl Cache for InMemoryCache {
             .set(self.max_cache_size_mb as i64 * 1024_i64 * 1024_i64);
         metrics
             .with_label_values(&["memorycache", "mem_used_bytes"])
-            .set(bytes_used as i64);
+            .set(bytes_used);
     }
 }
 
