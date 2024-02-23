@@ -6,7 +6,7 @@ use crate::rpc::error::Errors;
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
 
-use base64::encode;
+use base64::prelude::*;
 use hyper::body::Bytes;
 
 use image::{DynamicImage, GenericImageView, ImageOutputFormat};
@@ -154,14 +154,18 @@ impl Document {
     }
 
     pub fn to_url(&self) -> String {
-        format!("data:{};base64,{}", self.content_type, encode(&self.bytes))
+        format!(
+            "data:{};base64,{}",
+            self.content_type,
+            BASE64_STANDARD.encode(&self.bytes)
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{GenericImage, ImageOutputFormat, Rgba};
+    use image::{GenericImage, Rgba};
     use rand::Rng;
 
     const X_SIZE: u32 = 1600;
