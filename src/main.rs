@@ -24,7 +24,7 @@ use hyper_util::rt::TokioIo;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 
-use hyper::server::conn::http2;
+use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use log::info;
 use tokio::net::TcpListener;
@@ -75,11 +75,8 @@ pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error 
         let service = service_fn(move |req| route(ctx.clone(), cfg.clone(), req));
 
         tokio::task::spawn(async move {
-            if let Err(err) = http2::Builder::new(TokioExecutor)
-                .serve_connection(io, service)
-                .await
-            {
-                println!("Error serviving connection {:?}", err);
+            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                println!("Error serving connection {:?}", err);
             }
         });
     }
