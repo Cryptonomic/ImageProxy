@@ -28,6 +28,8 @@ export enum ModerationLabel {
   Alcohol = "Alcohol",
   Gambling = "Gambling",
   Hate = "Hate",
+  ExplicitContent = "ExplicitContent",
+  DrugsAndTobacco = "DrugsAndTobacco",
   Unknown = "Unknown",
 }
 
