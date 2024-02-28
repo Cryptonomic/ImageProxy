@@ -17,7 +17,7 @@ const safeUrls = [
   "https://upload.wikimedia.org/wikipedia/commons/1/1b/GreatBarrierReef-EO.JPG",
 ];
 const unsafeUrls = [
-  "https://upload.wikimedia.org/wikipedia/commons/8/84/Michelangelo%27s_David_2015.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/6/68/At_the_pool_in_the_sun.jpg",
 ];
 
 describe("Image proxy tests", () => {
