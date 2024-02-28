@@ -41,6 +41,9 @@ pub enum ModerationCategories {
     Gambling,
     Hate,
     Unknown,
+    // Newer Categories
+    ExplicitContent,
+    DrugsAndTobacco,
 }
 
 impl std::fmt::Display for ModerationCategories {
