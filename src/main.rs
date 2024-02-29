@@ -26,7 +26,7 @@ use tikv_jemallocator::Jemalloc;
 
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use log::info;
+use log::{error, info};
 use tokio::net::TcpListener;
 use tokio::runtime::Builder as TokioBuilder;
 
@@ -76,7 +76,7 @@ pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error 
 
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                println!("Error serving connection {:?}", err);
+                error!("Error serving connection {:?}", err);
             }
         });
     }
