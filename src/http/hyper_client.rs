@@ -3,22 +3,25 @@ use std::io::ErrorKind;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use hyper::client::HttpConnector;
-use hyper::{body::to_bytes, Uri};
-use hyper::{Client, Method, Request};
+use http_body_util::{BodyExt, Full};
+use hyper::body::Bytes;
+use hyper::Uri;
+use hyper::{Method, Request};
 use hyper_timeout::TimeoutConnector;
 use hyper_tls::HttpsConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use log::error;
 
-use hyper::client::connect::dns::GaiResolver;
-use hyper::Body;
+use hyper_util::client::legacy::connect::dns::GaiResolver;
 use uuid::Uuid;
 
 use super::{HttpClientProvider, StatusCode, CODE_CONNECTION_ERROR, CODE_IO_ERROR, CODE_TIMEOUT};
 use crate::document::Document;
 
 pub struct HyperHttpClient {
-    client: Client<TimeoutConnector<HttpsConnector<HttpConnector<GaiResolver>>>, Body>,
+    client: Client<TimeoutConnector<HttpsConnector<HttpConnector<GaiResolver>>>, Full<Bytes>>,
     _max_document_size: Option<u64>,
     useragent: Option<String>,
 }
@@ -32,7 +35,7 @@ impl HyperHttpClient {
         connector.set_read_timeout(Some(Duration::from_secs(timeout)));
         connector.set_write_timeout(Some(Duration::from_secs(timeout)));
 
-        let client = Client::builder().build::<_, hyper::Body>(connector);
+        let client = Client::builder(TokioExecutor::new()).build::<_, Full<Bytes>>(connector);
         HyperHttpClient {
             client,
             _max_document_size: max_document_size,
@@ -50,7 +53,7 @@ impl HttpClientProvider for HyperHttpClient {
         } else {
             request
         };
-        let request = request.body(Body::empty()).unwrap();
+        let request = request.body(Full::<Bytes>::default()).unwrap();
         let response = self.client.request(request).await.map_err(|error| {
             error!(
                 "Unable to fetch document, id={}, reason={}, url={}",
@@ -68,13 +71,15 @@ impl HttpClientProvider for HyperHttpClient {
         match response.status() {
             hyper::StatusCode::OK => {
                 let headers = response.headers().clone();
-                let bytes = to_bytes(response.into_body()).await.map_err(|error| {
-                    error!(
-                        "Unable to fetch document, id={}, reason={}, url={}",
-                        req_id, error, uri
-                    );
-                    CODE_IO_ERROR
-                })?;
+                let bytes = response
+                    .collect()
+                    .await
+                    .map_err(|e| {
+                        error!("Hyper Client Error: {}", e);
+                        CODE_IO_ERROR
+                    })
+                    .map(|b| b.to_bytes())?;
+
                 let content_length = headers
                     .get(hyper::header::CONTENT_LENGTH)
                     .and_then(|h| {

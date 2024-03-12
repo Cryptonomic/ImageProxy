@@ -124,7 +124,7 @@ async fn test_dummy_database_moderation_fns() {
         .await;
     let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
     assert_eq!(result.len(), 1);
-    let row = result.get(0).unwrap();
+    let row = result.first().unwrap();
     assert!(row.blocked);
     assert_eq!(row.categories[0], ModerationCategories::Alcohol);
     assert_eq!(row.url, url);
@@ -141,7 +141,7 @@ async fn test_dummy_database_moderation_fns() {
 
     let result = db.get_moderation_result(&[url.clone()]).await.unwrap();
     assert_eq!(result.len(), 1);
-    let row = result.get(0).unwrap();
+    let row = result.first().unwrap();
     assert!(row.blocked);
     assert_eq!(row.categories.len(), 2);
     assert_eq!(row.categories[0], ModerationCategories::Alcohol);
@@ -163,7 +163,7 @@ async fn test_dummy_database_report_fns() {
         .await;
     let result = db.get_reports().await.unwrap();
     assert_eq!(result.len(), 1);
-    let row = result.get(0).unwrap();
+    let row = result.first().unwrap();
     assert_eq!(row.url, url);
     assert_eq!(row.categories[0], ModerationCategories::Alcohol);
 }

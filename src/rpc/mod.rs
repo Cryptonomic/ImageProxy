@@ -95,7 +95,7 @@ pub async fn fetch(
         results
     };
 
-    let (moderation_status, categories, document) = match db_results.get(0) {
+    let (moderation_status, categories, document) = match db_results.first() {
         Some(result) => {
             metrics::MODERATION.with_label_values(&["cache_hit"]).inc();
             info!(
@@ -290,12 +290,10 @@ pub async fn describe_report(
 mod tests {
     use hyper::body::Bytes;
     use moka::sync::Cache as MokaCache;
-    use uuid::Uuid;
 
     use crate::config::{Host, IpfsGatewayConfig};
     use crate::db::tests::DummyDatabase;
     use crate::dns::DummyDnsResolver;
-    use crate::document::Document;
     use crate::http::filters::private_network::PrivateNetworkFilter;
     use crate::http::filters::UriFilter;
     use crate::http::tests::DummyHttpClient;
@@ -303,9 +301,7 @@ mod tests {
     use crate::moderation::tests::DummyModerationProvider;
     use crate::moderation::ModerationCategories;
 
-    use crate::proxy::Context;
     use std::net::IpAddr;
-    use std::sync::Arc;
 
     use super::*;
 

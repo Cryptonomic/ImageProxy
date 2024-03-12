@@ -1,5 +1,5 @@
 {
-  "url": "http://localhost:3000",
+  "url": "http://127.0.0.1:3000",
   "version": "1.0.0",
   "apikey": "134472c4dd9118dbff1ed4e5fc7f1d056a0d690c9b6cc47c5c2453a011f57127"
 }

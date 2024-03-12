@@ -16,19 +16,18 @@ pub mod rpc;
 pub mod utils;
 
 use std::{
-    convert::Infallible,
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
 
+use hyper_util::rt::TokioIo;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 
-use hyper::{
-    service::{make_service_fn, service_fn},
-    Server,
-};
-use log::info;
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use log::{error, info};
+use tokio::net::TcpListener;
 use tokio::runtime::Builder as TokioBuilder;
 
 use crate::{
@@ -46,26 +45,41 @@ pub mod built_info {
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
+#[derive(Clone)]
+/// An Executor that uses the tokio runtime.
+pub struct TokioExecutor;
+
+impl<F> hyper::rt::Executor<F> for TokioExecutor
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::task::spawn(fut);
+    }
+}
+
 pub async fn run(config: Configuration) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::new(IpAddr::V4(config.bind_address), config.port);
+    let listener = TcpListener::bind(addr).await?;
     let config = Arc::new(config);
     let context = Arc::new(Context::new(config.clone()).await?);
-    let service = make_service_fn(move |_| {
-        let context = context.clone();
-        let config = config.clone();
-        async move {
-            Ok::<_, Infallible>(service_fn(move |req| {
-                let context = context.to_owned();
-                let config = config.to_owned();
-                route(context, config, req)
-            }))
-        }
-    });
 
-    let server = Server::bind(&addr).serve(service);
     info!("Proxy online. Listening on http://{}", addr);
-    server.await?;
-    Ok(())
+    loop {
+        let (stream, _remote_addr) = listener.accept().await?;
+        let io = TokioIo::new(stream);
+        let ctx = context.clone();
+        let cfg = config.clone();
+
+        let service = service_fn(move |req| route(ctx.clone(), cfg.clone(), req));
+
+        tokio::task::spawn(async move {
+            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                error!("Error serving connection {:?}", err);
+            }
+        });
+    }
 }
 
 fn main() {

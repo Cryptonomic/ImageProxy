@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use aws_config::Region;
 use log::{debug, error, warn};
 use std::env;
 
@@ -11,11 +12,8 @@ use crate::{
     rpc::error::Errors,
 };
 
-use aws_sdk_rekognition::{error::DetectModerationLabelsError, types::{Blob, SdkError}};
-use aws_sdk_rekognition::model::Image;
-use aws_sdk_rekognition::output::DetectModerationLabelsOutput;
-
-use aws_sdk_rekognition::{ Client as ClientRekognition, Region};
+use aws_sdk_rekognition::{error::SdkError, operation::detect_moderation_labels::{DetectModerationLabelsError, DetectModerationLabelsOutput}, primitives::Blob, types::Image};
+use aws_sdk_rekognition:: Client as ClientRekognition;
 
 pub struct Rekognition {
     pub region: String,
@@ -30,42 +28,17 @@ impl ModerationProvider for Rekognition {
         debug!("New Rekognition request");
         match self.get_moderation_labels(&document.bytes).await {
             Ok(result) => {
+                debug!("Rekognition Result: {:?}", result);
                 let labels = result.moderation_labels.unwrap_or_default();
                 let mut labels: Vec<ModerationCategories> = labels
-                    .into_iter()
-                    .map(|l| {
-                        debug!("Moderation labels: id={}, name={:?}, parent={:?}", document.id, l.name(), l.parent_name());
-                        let parent_name = l.parent_name().filter(|n| !n.is_empty());
-                        let name = l.name();
-                        if let Some(cat) = parent_name {
-                            let category = Rekognition::normalize_category(cat);
-                            if category == ModerationCategories::Unknown {
-                                warn!(
-                                    "Moderation category has no enum, id={}, cat={}",
-                                    document.id, cat
-                                );
-                            }
-                            category
-                        } else if let Some(cat) = name {
-                                warn!(
-                                    "Moderation category has no parent, id={}, cat={}",
-                                    document.id, cat
-                                );
-                                let category = Rekognition::normalize_category(cat);
-                                if category == ModerationCategories::Unknown {
-                                    warn!(
-                                        "Moderation category has no enum, id={}, cat={}",
-                                        document.id, cat
-                                    );
-                                }
-                                category
-                        } else {
-                                warn!(
-                                    "Moderation results returned empty labels for both name and parent_name, id={}",
-                                    document.id
-                                );
-                                ModerationCategories::Unknown
-                        }                        
+                    .into_iter()               
+                    .filter(|l| (l.parent_name().is_none() || l.parent_name() == Some("")) && (l.name.is_some()))   // Only interested in top level labels
+                    .map(|l| {                                                
+                        let normalized_category = l.name().map(Rekognition::normalize_category).unwrap_or(ModerationCategories::Unknown);                        
+                        if normalized_category == ModerationCategories::Unknown {
+                            warn!("Label normalization failed for Rekognition: id={}, label_name={:?}, label_parent={:?}", document.id, l.name(), l.parent_name());
+                        }
+                        normalized_category             
                     })
                     .collect();
 
@@ -103,7 +76,7 @@ impl Rekognition {
     pub async fn get_moderation_labels(
         &self,
         bytes: &hyper::body::Bytes,
-    ) -> Result<DetectModerationLabelsOutput, SdkError<DetectModerationLabelsError>> {
+    ) -> Result<DetectModerationLabelsOutput, SdkError<DetectModerationLabelsError, >> {
         let region = Region::new(self.region.clone());
         let shared_config = aws_config::from_env().region(region).load().await;
         let client = ClientRekognition::new(&shared_config);
@@ -117,14 +90,21 @@ impl Rekognition {
         match input {
             "Explicit Nudity" => ModerationCategories::ExplicitNudity,
             "Suggestive" => ModerationCategories::Suggestive,
-            "Violence" => ModerationCategories::Violence,
-            "Visually Disturbing" => ModerationCategories::VisuallyDisturbing,
-            "Rude" => ModerationCategories::Rude,
             "Drugs" => ModerationCategories::Drugs,
             "Tobacco" => ModerationCategories::Tobacco,
+            "Rude" => ModerationCategories::Rude,
+            "Hate" => ModerationCategories::Hate,
+            // Model 7
+            "Violence" => ModerationCategories::Violence,
+            "Visually Disturbing" => ModerationCategories::VisuallyDisturbing,
             "Alcohol" => ModerationCategories::Alcohol,
             "Gambling" => ModerationCategories::Gambling,
-            "Hate" => ModerationCategories::Hate,
+            "Hate Symbols" => ModerationCategories::Hate,
+            "Explicit" => ModerationCategories::ExplicitContent,
+            "Rude Gestures" => ModerationCategories::Rude,
+            "Drugs & Tobacco" => ModerationCategories::DrugsAndTobacco,
+            "Non-Explicit Nudity of Intimate parts and Kissing" => ModerationCategories::Suggestive,
+            "Swimwear or Underwear" => ModerationCategories::Suggestive,
             _ => ModerationCategories::Unknown,
         }
     }

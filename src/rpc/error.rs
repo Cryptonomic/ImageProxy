@@ -1,4 +1,6 @@
-use hyper::{Body, Response};
+use http_body_util::Full;
+use hyper::body::Bytes;
+use hyper::Response;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -16,6 +18,7 @@ pub struct RpcError {
 pub enum Errors {
     InvalidRpcVersionError,
     InvalidRpcMethodError,
+    RpcPayloadTooBigError,
     JsonDecodeError,
     InternalError,
     FetchFailed,
@@ -50,6 +53,7 @@ impl Errors {
                 "Connection/Request/Response from the destination timed out".to_string(),
             ),
             Errors::ImageResizeError => (112, "Image Resize Error".to_string()),
+            Errors::RpcPayloadTooBigError => (113, "RPC Payload too big".to_string()),
         };
 
         RpcError {
@@ -59,7 +63,7 @@ impl Errors {
         }
     }
 
-    pub fn to_response(&self, request_id: &Uuid) -> Response<Body> {
+    pub fn to_response(&self, request_id: &Uuid) -> Response<Full<Bytes>> {
         let error = self.to_rpc_error(request_id);
 
         let body = serde_json::to_string_pretty(&ErrorResponse {
@@ -71,7 +75,7 @@ impl Errors {
         Response::builder()
             .status(hyper::StatusCode::OK)
             .header(hyper::header::CONTENT_TYPE, "application/json")
-            .body(Body::from(body))
+            .body(Full::new(Bytes::from(body)))
             .unwrap_or_default()
     }
 }
